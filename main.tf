@@ -41,3 +41,13 @@ resource "aws_iam_role_policy" "ssm_to_lambda" {
   policy = data.aws_iam_policy_document.ssm_for_lambda.json
   role   = aws_iam_role.lambda_exec.id
 }
+
+resource "aws_iam_role_policy" "s3_to_lambda" {
+  policy = data.aws_iam_policy_document.s3_for_lambda.json
+  role   = aws_iam_role.lambda_exec.id
+}
+
+resource "aws_iam_role_policy" "ecr_to_lambda" {
+  policy = data.aws_iam_policy_document.ecr_for_lambda.json
+  role   = aws_iam_role.lambda_exec.id
+}

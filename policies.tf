@@ -37,3 +37,42 @@ data "aws_iam_policy_document" "ssm_for_lambda" {
     resources = ["*"]
   }
 }
+
+data "aws_iam_policy_document" "ecr_for_lambda" {
+  # TODO: Restrict permissions to specific resources
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:Get*"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:List*"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:Describe*"]
+    resources = ["*"]
+  }
+}
+
+
+data "aws_iam_policy_document" "s3_for_lambda" {
+  # TODO: Restrict permissions to specific resources
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListObjects"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = ["*"]
+  }
+}
