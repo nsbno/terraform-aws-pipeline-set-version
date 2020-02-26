@@ -115,13 +115,16 @@ def get_ecr_versions(image_tag):
 
 
 def update_parameterstore(credentials, name, value, region):
-    ssm = boto3.client(
-        "ssm",
-        aws_access_key_id=credentials["AccessKeyId"],
-        aws_secret_access_key=credentials["SecretAccessKey"],
-        aws_session_token=credentials["SessionToken"],
-        region_name=region,
-    )
+    if credentials is None:
+        ssm = boto3.client("ssm", region_name=region)
+    else:
+        ssm = boto3.client(
+            "ssm",
+            aws_access_key_id=credentials["AccessKeyId"],
+            aws_secret_access_key=credentials["SecretAccessKey"],
+            aws_session_token=credentials["SessionToken"],
+            region_name=region,
+        )
     logger.info(
         "Setting SSM parameter '%s' to '%s' in region '%s'",
         name,
@@ -184,7 +187,7 @@ def lambda_handler(event, context):
     logger.info("Lambda triggered with input data '%s'", json.dumps(event))
 
     region = os.environ["AWS_REGION"]
-    account_id = event["account_id"]
+    account_id = event.get("account_id", "")
     cross_account_role = event["cross_account_role"]
     ecr_filter_tag = event["ecr_filter_tag"]
     lambda_s3_bucket = event["lambda_s3_bucket"]
@@ -194,7 +197,9 @@ def lambda_handler(event, context):
     lambda_versions = get_lambda_versions(lambda_s3_bucket, lambda_s3_prefix)
     ecr_versions = get_ecr_versions(ecr_filter_tag)
 
-    credentials = assume_role(account_id, cross_account_role)
+    credentials = (
+        assume_role(account_id, cross_account_role) if account_id else None
+    )
 
     set_ssm_parameters_for_lambdas(
         credentials, lambda_versions, ssm_prefix, region
