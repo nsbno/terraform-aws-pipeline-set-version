@@ -50,6 +50,20 @@ def assume_role(account_id, account_role):
 
 
 def get_ecr_versions(image_tag):
+    """Gets the latest image version of all ECR repositories in the current account.
+
+    Only repositories containing images tagged with `image_tag` and a tag ending
+    with "-SHA1" are included. The image version is extracted from the SHA1-tag of
+    the most recently pushed image.
+
+    Args:
+        image_tag: A string representing an image tag to filter on (e.g., "master-branch").
+
+    Returns:
+        A dictionary containing the names of ECR repositories together with the
+        latest image version in each repository.
+    """
+
     client = boto3.client("ecr")
     repositories = client.describe_repositories()["repositories"]
     logger.debug("Found %s ECR repositories", len(repositories))
