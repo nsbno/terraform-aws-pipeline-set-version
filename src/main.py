@@ -67,9 +67,9 @@ def assume_role(account_id, account_role, fallback_role=None):
 def get_ecr_versions(image_tag):
     """Gets the latest image version of all ECR repositories in the current account.
 
-    Only repositories containing images tagged with `image_tag` and a tag ending
-    with "-SHA1" are included. The image version is extracted from the SHA1-tag of
-    the most recently pushed image.
+    Only repositories containing at least one image tagged with `image_tag` and a tag
+    ending with "-SHA1" are included. The image version is extracted from the SHA1-tag
+    of the most recently pushed image.
 
     Args:
         image_tag: A string representing an image tag to filter on (e.g., "master-branch").
