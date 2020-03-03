@@ -48,7 +48,7 @@ def assume_role(account_id, account_role, fallback_role=None):
             )
             time.sleep(retry_wait_in_seconds)
     if assuming_role:
-        if fallback_role:
+        if fallback_role is not None:
             logger.info(
                 "Failed to assume role with arn '%s', trying to assume fallback role '%s'",
                 account_role,
