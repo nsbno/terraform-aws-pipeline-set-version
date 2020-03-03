@@ -24,12 +24,13 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-def assume_role(account_id, account_role):
+def assume_role(account_id, account_role, fallback_role=None):
     sts_client = boto3.client("sts")
     role_arn = f"arn:aws:iam::{account_id}:role/{account_role}"
     assuming_role = True
-    retry_wait_in_seconds = 15
-    while assuming_role:
+    retry_wait_in_seconds = 5
+    retries = 0
+    while assuming_role and retries < 2:
         try:
             logger.info("Trying to assume role with arn '%s'", role_arn)
             assumedRoleObject = sts_client.assume_role(
@@ -37,6 +38,7 @@ def assume_role(account_id, account_role):
             )
             assuming_role = False
         except botocore.exceptions.ClientError:
+            retries += 1
             assuming_role = True
             logger.exception("Failed to assume role with arn '%s'", role_arn)
             logger.info(
@@ -45,6 +47,19 @@ def assume_role(account_id, account_role):
                 retry_wait_in_seconds,
             )
             time.sleep(retry_wait_in_seconds)
+    if assuming_role:
+        if fallback_role:
+            logger.info(
+                "Failed to assume role with arn '%s', trying to assume fallback role '%s'",
+                account_role,
+                fallback_role,
+            )
+            return assume_role(account_id, fallback_role)
+        logger.error(
+            "Failed to assume role with arn '%s', and no fallback role was supplied. Exiting",
+            account_role,
+        )
+        raise Exception()
     logger.info("Successfully assumed role with arn '%s'", role_arn)
     return assumedRoleObject["Credentials"]
 
@@ -203,6 +218,7 @@ def lambda_handler(event, context):
     region = os.environ["AWS_REGION"]
     account_id = event.get("account_id", "")
     cross_account_role = event["cross_account_role"]
+    fallback_role = event.get("fallback_role", None)
     ecr_filter_tag = event["ecr_filter_tag"]
     lambda_s3_bucket = event["lambda_s3_bucket"]
     lambda_s3_prefix = event["lambda_s3_prefix"]
@@ -212,7 +228,11 @@ def lambda_handler(event, context):
     ecr_versions = get_ecr_versions(ecr_filter_tag)
 
     credentials = (
-        assume_role(account_id, cross_account_role) if account_id else None
+        assume_role(
+            account_id, cross_account_role, fallback_role=fallback_role
+        )
+        if account_id
+        else None
     )
 
     set_ssm_parameters_for_lambdas(
