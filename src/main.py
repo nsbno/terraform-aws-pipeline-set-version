@@ -154,12 +154,19 @@ def get_lambda_versions(bucket_name, s3_prefix):
         Bucket=bucket_name, Prefix=s3_prefix
     )
 
-    s3_files = list(
-        map(
-            lambda s3_file: s3_file["Key"],
-            contents_of_lambda_folder["Contents"],
+    try:
+        content = contents_of_lambda_folder["Contents"]
+    except KeyError:
+        # 'Contents' key will be missing from response if no matching
+        # objects were found
+        logger.info(
+            "Did not find any objects in bucket '%s' matching the prefix '%s'",
+            bucket_name,
+            s3_prefix,
         )
-    )
+        return {}
+
+    s3_files = list(map(lambda s3_file: s3_file["Key"], content))
     logger.info("Found S3 files '%s'", s3_files)
     s3_zips = list(
         filter(
