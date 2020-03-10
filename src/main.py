@@ -5,7 +5,7 @@
 # Distributed under terms of the MIT license.
 
 """
-SSM parameters are used in each environment (test, stage, prod) to
+SSM parameters are used in each environment (service, test, stage, prod) to
 reflect the current versions of Lambda functions and Docker images.
 
 For a given environment, this script updates these parameters to
@@ -129,6 +129,14 @@ def get_ecr_versions(image_tag):
 
 
 def update_parameterstore(credentials, name, value, region):
+    """Updates (or creates) one parameter in parameter store.
+
+    Args:
+        credentials: The credentials to use when creating the SSM client.
+        name: The name of the parameter.
+        value: The value of the parameter.
+        region: The region to use when creating the SSM client.
+    """
     if credentials is None:
         ssm = boto3.client("ssm", region_name=region)
     else:
@@ -149,6 +157,20 @@ def update_parameterstore(credentials, name, value, region):
 
 
 def get_lambda_versions(bucket_name, s3_prefix):
+    """Gets the S3 version of all Lambda zip files located under a given S3 prefix.
+
+    A zip file located under the prefix is treated as a Lambda iff it has the exact same
+    name as its parent folder (e.g., `nsbno/trafficinfo-aws/lambdas/function-name/function-name.zip`).
+
+    Args:
+        bucket_name: The name of the S3 bucket to use when looking for objects.
+        s3_prefix: The S3 prefix to use when looking for objects
+            (e.g., `nsbno/trafficinfo-aws/lambdas`)
+
+    Returns:
+        A dictionary containing the S3 keys of the Lambda functions together with the
+        S3 version of their respective zip files.
+    """
     s3 = boto3.client("s3")
     contents_of_lambda_folder = s3.list_objects(
         Bucket=bucket_name, Prefix=s3_prefix
@@ -190,6 +212,22 @@ def get_lambda_versions(bucket_name, s3_prefix):
 def set_ssm_parameters_for_lambdas(
     credentials, lambda_versions, ssm_prefix, region
 ):
+    """Updates (or creates) one parameter in parameter store for each
+    pair of Lambda function and version passed in.
+
+    Example: The versions in the following dict would result in a parameter with
+        name "hello-world" and value "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B":
+        `{"nsbno/trafficinfo-aws/lambdas/hello-world/hello-world.zip": "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B"}`
+
+    Args:
+        credentials: The credentials to use when creating the SSM client.
+        lambda_versions: A dictionary containing the S3 key of Lambda zip files
+            as well as their S3 version.
+        ssm_prefix: The prefix to use for the parameters in parameter store
+            (e.g., `trafficinfo`).
+        region: The region to use when creating the SSM client.
+    """
+
     for s3_key, s3_version in lambda_versions.items():
         lambda_name = s3_key.rsplit("/", 2)[1]
         ssm_name = f"/{ssm_prefix}/{lambda_name}"
@@ -199,6 +237,21 @@ def set_ssm_parameters_for_lambdas(
 def set_ssm_parameters_for_ecr_repos(
     credentials, ecr_versions, ssm_prefix, region
 ):
+    """Updates (or creates) one parameter in parameter store for each
+    pair of ECR repository and version passed in.
+
+    Example: The versions in the following dict would result in a parameter with
+        name "trafficinfo-docker-app" and value "abcdefgh-SHA1":
+        `{"trafficinfo-docker-app": "acdefgh-SHA1"}`
+
+    Args:
+        credentials: The credentials to use when creating the SSM client.
+        lambda_versions: A dictionary containing the names of ECR
+            repositories as well as their version.
+        ssm_prefix: The prefix to use for the parameters in parameter store
+            (e.g., `trafficinfo`).
+        region: The region to use when creating the SSM client.
+    """
     for repo, version in ecr_versions.items():
         ssm_name = f"/{ssm_prefix}/{repo}"
         update_parameterstore(credentials, ssm_name, version, region)
