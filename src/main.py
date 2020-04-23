@@ -49,7 +49,7 @@ def assume_role(account_id, account_role):
     return assumedRoleObject["Credentials"]
 
 
-def get_ecr_versions(image_tag):
+def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
     """Gets the latest image version of all ECR repositories in the current account.
 
     Only repositories containing at least one image tagged with `image_tag` and a tag
@@ -57,7 +57,8 @@ def get_ecr_versions(image_tag):
     of the most recently pushed image.
 
     Args:
-        image_tag: A string representing an image tag to filter on (e.g., "master-branch").
+        repo_name_filters: An optional list of names of ECR to filter on (e.g., ["trafficinfo-baseline-micronaut"])
+        image_tag_filters: An optional list of image tags to filter on (e.g., ["master-branch"]).
 
     Returns:
         A dictionary containing the names of ECR repositories together with the
@@ -66,6 +67,13 @@ def get_ecr_versions(image_tag):
 
     client = boto3.client("ecr")
     repositories = client.describe_repositories()["repositories"]
+    if len(repo_name_filters):
+        repositories = list(
+            filter(
+                lambda r: r["repositoryName"] in repo_name_filters,
+                repositories,
+            )
+        )
     logger.debug("Found %s ECR repositories", len(repositories))
     versions = {}
     for repo in repositories:
@@ -74,14 +82,16 @@ def get_ecr_versions(image_tag):
         try:
             images = client.describe_images(
                 repositoryName=name,
-                imageIds=[{"imageTag": image_tag}],
+                imageIds=[
+                    {"imageTag": image_tag} for image_tag in image_tag_filters
+                ],
                 filter={"tagStatus": "TAGGED"},
             )["imageDetails"]
         except client.exceptions.ImageNotFoundException:
             logger.warn(
                 "No (matching) images found in ECR repo '%s' -- the repository is either empty, or does not contain any images tagged with '%s'",
                 name,
-                image_tag,
+                ", ".join(image_tag_filters),
             )
             continue
         # Only keep images ttagged with a SHA1-tag
@@ -95,9 +105,9 @@ def get_ecr_versions(image_tag):
         )
         if len(filtered_images) == 0:
             logger.warn(
-                "Could not find an image in repository '%s' tagged with both '%s' and a SHA1",
+                "Could not find an image in repository '%s' tagged with both a SHA1 and the tags '%s'",
                 name,
-                image_tag,
+                ", ".join(ecr_image_tag_filters),
             )
             continue
         # Sort the images by date
@@ -261,15 +271,23 @@ def lambda_handler(event, context):
     logger.info("Lambda triggered with input data '%s'", json.dumps(event))
 
     region = os.environ["AWS_REGION"]
-    account_id = event.get("account_id", "")
     cross_account_role = event["cross_account_role"]
-    ecr_filter_tag = event["ecr_filter_tag"]
-    lambda_s3_bucket = event["lambda_s3_bucket"]
-    lambda_s3_prefix = event["lambda_s3_prefix"]
     ssm_prefix = event["ssm_prefix"]
+    account_id = event.get("account_id", "")
+    ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
+    ecr_repo_name_filters = event.get("ecr_repo_name_filters", [])
+    lambda_s3_bucket = event.get("lambda_s3_bucket", "")
+    lambda_s3_prefix = event.get("lambda_s3_prefix", "")
 
-    lambda_versions = get_lambda_versions(lambda_s3_bucket, lambda_s3_prefix)
-    ecr_versions = get_ecr_versions(ecr_filter_tag)
+    lambda_versions = {}
+    if lambda_s3_bucket and lambda_s3_prefix:
+        lambda_versions = get_lambda_versions(
+            lambda_s3_bucket, lambda_s3_prefix
+        )
+
+    ecr_versions = get_ecr_versions(
+        ecr_repo_name_filters, ecr_image_tag_filters
+    )
 
     credentials = (
         assume_role(account_id, cross_account_role) if account_id else None
