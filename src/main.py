@@ -80,12 +80,18 @@ def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
         name = repo["repositoryName"]
         # Only tagged images
         try:
+            filter_kwargs = {}
+            if len(image_tag_filters):
+                filter_kwargs = {
+                    "imageIds": [
+                        {"imageTag": image_tag}
+                        for image_tag in image_tag_filters
+                    ]
+                }
             images = client.describe_images(
                 repositoryName=name,
-                imageIds=[
-                    {"imageTag": image_tag} for image_tag in image_tag_filters
-                ],
                 filter={"tagStatus": "TAGGED"},
+                **filter_kwargs,
             )["imageDetails"]
         except client.exceptions.ImageNotFoundException:
             logger.warn(
