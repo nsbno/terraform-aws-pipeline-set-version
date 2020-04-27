@@ -113,7 +113,7 @@ def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
             logger.warn(
                 "Could not find an image in repository '%s' tagged with both a SHA1 and the tags '%s'",
                 name,
-                ", ".join(ecr_image_tag_filters),
+                ", ".join(image_tag_filters),
             )
             continue
         # Sort the images by date
