@@ -173,9 +173,9 @@ def update_parameterstore(credentials, name, value, region):
 
 
 def get_lambda_versions(bucket_name, s3_prefix):
-    """Gets the S3 version of all Lambda zip files located under a given S3 prefix.
+    """Gets the S3 version of all Lambda zip or jar files located under a given S3 prefix.
 
-    A zip file located under the prefix is treated as a Lambda iff it has the exact same
+    A zip or jar file located under the prefix is treated as a Lambda iff it has the exact same
     name as its parent folder (e.g., `nsbno/trafficinfo-aws/lambdas/function-name/function-name.zip`).
 
     Args:
@@ -185,7 +185,7 @@ def get_lambda_versions(bucket_name, s3_prefix):
 
     Returns:
         A dictionary containing the S3 keys of the Lambda functions together with the
-        S3 version of their respective zip files.
+        S3 version of their respective zip or jar files.
     """
     s3 = boto3.client("s3")
     contents_of_lambda_folder = s3.list_objects(
@@ -206,19 +206,27 @@ def get_lambda_versions(bucket_name, s3_prefix):
 
     s3_files = list(map(lambda s3_file: s3_file["Key"], content))
     logger.info("Found S3 files '%s'", s3_files)
-    s3_zips = list(
+    s3_lambda_packages = list(
         filter(
-            lambda key: key.endswith(".zip")
-            and key.rsplit("/", 2)[1] == key.rsplit("/", 2)[2].rstrip(".zip"),
+            lambda key: (
+                key.endswith(".zip")
+                and key.rsplit("/", 2)[1]
+                == key.rsplit("/", 2)[2].rstrip(".zip")
+            )
+            or (
+                key.endswith(".jar")
+                and key.rsplit("/", 2)[1]
+                == key.rsplit("/", 2)[2].rstrip(".jar")
+            ),
             s3_files,
         )
     )
-    logger.info("Found Lambda zips '%s'", s3_zips)
+    logger.info("Found Lambda deployment packages '%s'", s3_lambda_packages)
 
     s3_resource = boto3.resource("s3")
     versions = {
         s3_key: s3_resource.Object(bucket_name, s3_key).version_id
-        for s3_key in s3_zips
+        for s3_key in s3_lambda_packages
     }
 
     logger.info("Found Lambda versions '%s'", versions)
