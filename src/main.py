@@ -289,7 +289,7 @@ def lambda_handler(event, context):
     lambda_s3_prefix = os.environ["LAMBDA_S3_PREFIX"]
 
     # Dynamic Lambda inputs
-    cross_account_role = event.get("cross_account_role", "")
+    role_to_assume = event.get("role_to_assume", "")
     account_id = event.get("account_id", "")
 
     lambda_versions = {}
@@ -305,8 +305,8 @@ def lambda_handler(event, context):
         )
 
     credentials = (
-        assume_role(account_id, cross_account_role)
-        if account_id and cross_account_role
+        assume_role(account_id, role_to_assume)
+        if account_id and role_to_assume
         else None
     )
 
