@@ -1,6 +1,8 @@
 # terraform-aws-pipeline-set-version
 A Terraform module that creates a Lambda function that sets SSM parameters containing the latest _version_ for Docker and Lambda applications. The main use-case is to run the function as a task in a CD pipeline implemented using AWS Step Functions, and reference the parameters in Terraform code that is deployed at a later point in the pipeline.
 
+It is assumed that the artifact stores, i.e., the ECR repositories and the S3 bucket containing Lambda deployment packages, exist in the same account as where the Lambda function is created.
+
 ## Versioning of Docker applications
 The function assumes that each Docker application has a dedicated ECR repository where images are tagged with at least one tag `<commit-has>-SHA1`.
 
