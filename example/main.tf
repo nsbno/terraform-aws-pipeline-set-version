@@ -26,12 +26,10 @@ resource "aws_sfn_state_machine" "state_machine" {
   definition = local.state_definition
   name       = "${local.name_prefix}-state-machine"
   role_arn   = aws_iam_role.state_machine_role.arn
-  tags       = local.tags
 }
 
 resource "aws_iam_role" "state_machine_role" {
   assume_role_policy = data.aws_iam_policy_document.state_machine_assume.json
-  tags               = local.tags
 }
 
 resource "aws_iam_role_policy" "lambda_to_state_machine" {
