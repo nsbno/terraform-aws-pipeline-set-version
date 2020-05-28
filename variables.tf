@@ -20,6 +20,12 @@ variable "ecr_repositories" {
   default     = []
 }
 
+variable "lambda_names" {
+  description = "The name of the Lambda functions to set versions for."
+  type        = list(string)
+  default     = []
+}
+
 variable "lambda_s3_bucket" {
   description = "The name of the S3 bucket containing Lambda deployment packages to set versions for."
   type        = string

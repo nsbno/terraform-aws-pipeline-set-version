@@ -172,7 +172,7 @@ def update_parameterstore(credentials, name, value, region):
     ssm.put_parameter(Name=name, Value=value, Type="String", Overwrite=True)
 
 
-def get_lambda_versions(bucket_name, s3_prefix):
+def get_lambda_versions(lambda_names, bucket_name, s3_prefix):
     """Gets the S3 version of all Lambda deployment packages located under a given S3 prefix.
 
     A deployment package located under the prefix is treated as a Lambda iff it is inside a
@@ -180,9 +180,10 @@ def get_lambda_versions(bucket_name, s3_prefix):
     (e.g., `nsbno/trafficinfo-aws/lambdas/<function-name>/package.zip`).
 
     Args:
-        bucket_name: The name of the S3 bucket to use when looking for objects.
-        s3_prefix: The S3 prefix to use when looking for objects
-            (e.g., `nsbno/trafficinfo-aws/lambdas`)
+        lambda_names: The name of the Lambda functions to set versions for.
+        bucket_name: The name of the S3 bucket to use when looking for Lambda deployment packages.
+        s3_prefix: The S3 prefix to use when looking for Lambda deployment packages
+            (e.g., `nsbno/trafficinfo-aws/lambdas`).
 
     Returns:
         A dictionary containing the S3 keys of the Lambda functions together with the
@@ -209,7 +210,8 @@ def get_lambda_versions(bucket_name, s3_prefix):
     logger.info("Found S3 files '%s'", s3_files)
     s3_deployment_packages = list(
         filter(
-            lambda key: key.rsplit("/", 1) != s3_prefix
+            lambda key: key.rsplit("/", 2)[1] in lambda_names
+            and key.rsplit("/", 1) != s3_prefix
             and (key.endswith("/package.zip") or key.endswith("/package.jar")),
             s3_files,
         )
@@ -285,6 +287,7 @@ def lambda_handler(event, context):
     ssm_prefix = os.environ["SSM_PREFIX"]
     ecr_image_tag_filters = json.loads(os.environ["ECR_IMAGE_TAG_FILTERS"])
     ecr_repositories = json.loads(os.environ["ECR_REPOSITORIES"])
+    lambda_names = json.loads(os.environ["LAMBDA_NAMES"])
     lambda_s3_bucket = os.environ["LAMBDA_S3_BUCKET"]
     lambda_s3_prefix = os.environ["LAMBDA_S3_PREFIX"]
 
@@ -293,9 +296,9 @@ def lambda_handler(event, context):
     account_id = event.get("account_id", "")
 
     lambda_versions = {}
-    if lambda_s3_bucket and lambda_s3_prefix:
+    if lambda_s3_bucket and lambda_s3_prefix and len(lambda_names):
         lambda_versions = get_lambda_versions(
-            lambda_s3_bucket, lambda_s3_prefix
+            lambda_names, lambda_s3_bucket, lambda_s3_prefix
         )
 
     ecr_versions = {}

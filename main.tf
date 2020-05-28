@@ -27,6 +27,7 @@ resource "aws_lambda_function" "pipeline_set_version" {
     variables = {
       ECR_IMAGE_TAG_FILTERS = jsonencode(var.ecr_image_tag_filters)
       ECR_REPOSITORIES      = jsonencode(var.ecr_repositories)
+      LAMBDA_NAMES          = jsonencode(var.lambda_names)
       LAMBDA_S3_BUCKET      = var.lambda_s3_bucket
       LAMBDA_S3_PREFIX      = var.lambda_s3_prefix
       SSM_PREFIX            = var.ssm_prefix
