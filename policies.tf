@@ -51,10 +51,11 @@ data "aws_iam_policy_document" "ecr_for_lambda" {
 }
 
 data "aws_iam_policy_document" "s3_for_lambda" {
+  # TODO: What happens if lambda_s3_prefix is ""?
   statement {
     effect    = "Allow"
     actions   = ["s3:GetObject", "s3:ListObjects"]
-    resources = ["${local.s3_arn}/${var.lambda_s3_prefix}"]
+    resources = ["${local.s3_arn}/${var.lambda_s3_prefix}/*"]
   }
 
   statement {
