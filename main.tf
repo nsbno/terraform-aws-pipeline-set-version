@@ -7,6 +7,8 @@ data "aws_region" "current" {}
 locals {
   current_account_id = data.aws_caller_identity.current-account.account_id
   current_region     = data.aws_region.current.name
+  ecr_arns           = formatlist("arn:aws:ecr:${local.current_region}:${local.current_account_id}:repository/%s", var.ecr_repositories)
+  s3_arn             = "arn:aws:s3:::${var.lambda_s3_bucket}"
 }
 
 data "archive_file" "lambda_src" {
@@ -16,11 +18,19 @@ data "archive_file" "lambda_src" {
 }
 
 resource "aws_lambda_function" "pipeline_set_version" {
-  function_name    = "${var.name_prefix}-pipeline-set-version"
-  handler          = "main.lambda_handler"
-  role             = aws_iam_role.lambda_exec.arn
-  runtime          = "python3.7"
-  filename         = data.archive_file.lambda_src.output_path
+  function_name = "${var.name_prefix}-pipeline-set-version"
+  handler       = "main.lambda_handler"
+  role          = aws_iam_role.lambda_exec.arn
+  runtime       = "python3.7"
+  filename      = data.archive_file.lambda_src.output_path
+  environment {
+    variables = {
+      ECR_REPOSITORIES = jsonencode(var.ecr_repositories)
+      LAMBDA_S3_BUCKET = var.lambda_s3_bucket
+      LAMBDA_S3_PREFIX = var.lambda_s3_prefix
+      SSM_PREFIX       = var.name_prefix
+    }
+  }
   source_code_hash = filebase64sha256(data.archive_file.lambda_src.output_path)
   timeout          = 20
   tags             = var.tags
@@ -43,11 +53,13 @@ resource "aws_iam_role_policy" "ssm_to_lambda" {
 }
 
 resource "aws_iam_role_policy" "s3_to_lambda" {
+  count  = var.lambda_s3_bucket != "" && var.lambda_s3_prefix != "" ? 1 : 0
   policy = data.aws_iam_policy_document.s3_for_lambda.json
   role   = aws_iam_role.lambda_exec.id
 }
 
 resource "aws_iam_role_policy" "ecr_to_lambda" {
+  count  = length(var.ecr_repositories) > 0 ? 1 : 0
   policy = data.aws_iam_policy_document.ecr_for_lambda.json
   role   = aws_iam_role.lambda_exec.id
 }

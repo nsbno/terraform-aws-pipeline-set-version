@@ -173,10 +173,11 @@ def update_parameterstore(credentials, name, value, region):
 
 
 def get_lambda_versions(bucket_name, s3_prefix):
-    """Gets the S3 version of all Lambda zip files located under a given S3 prefix.
+    """Gets the S3 version of all Lambda deployment packages located under a given S3 prefix.
 
-    A zip file located under the prefix is treated as a Lambda iff it has the exact same
-    name as its parent folder (e.g., `nsbno/trafficinfo-aws/lambdas/function-name/function-name.zip`).
+    A deployment package located under the prefix is treated as a Lambda iff it is inside a
+    folder and contains a file named `package.jar` or `package.zip`
+    (e.g., `nsbno/trafficinfo-aws/lambdas/<function-name>/package.zip`).
 
     Args:
         bucket_name: The name of the S3 bucket to use when looking for objects.
@@ -185,7 +186,7 @@ def get_lambda_versions(bucket_name, s3_prefix):
 
     Returns:
         A dictionary containing the S3 keys of the Lambda functions together with the
-        S3 version of their respective zip files.
+        S3 version of their respective deployment packages.
     """
     s3 = boto3.client("s3")
     contents_of_lambda_folder = s3.list_objects(
@@ -206,19 +207,21 @@ def get_lambda_versions(bucket_name, s3_prefix):
 
     s3_files = list(map(lambda s3_file: s3_file["Key"], content))
     logger.info("Found S3 files '%s'", s3_files)
-    s3_zips = list(
+    s3_deployment_packages = list(
         filter(
-            lambda key: key.endswith(".zip")
-            and key.rsplit("/", 2)[1] == key.rsplit("/", 2)[2].rstrip(".zip"),
+            lambda key: key.rsplit("/", 1) != s3_prefix
+            and (key.endswith("/package.zip") or key.endswith("/package.jar")),
             s3_files,
         )
     )
-    logger.info("Found Lambda zips '%s'", s3_zips)
+    logger.info(
+        "Found Lambda deployment packages '%s'", s3_deployment_packages
+    )
 
     s3_resource = boto3.resource("s3")
     versions = {
         s3_key: s3_resource.Object(bucket_name, s3_key).version_id
-        for s3_key in s3_zips
+        for s3_key in s3_deployment_packages
     }
 
     logger.info("Found Lambda versions '%s'", versions)
@@ -233,7 +236,7 @@ def set_ssm_parameters_for_lambdas(
 
     Example: The versions in the following dict would result in a parameter with
         name "hello-world" and value "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B":
-        `{"nsbno/trafficinfo-aws/lambdas/hello-world/hello-world.zip": "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B"}`
+        `{"nsbno/trafficinfo-aws/lambdas/hello-world/package.zip": "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B"}`
 
     Args:
         credentials: The credentials to use when creating the SSM client.
@@ -277,13 +280,17 @@ def lambda_handler(event, context):
     logger.info("Lambda triggered with input data '%s'", json.dumps(event))
 
     region = os.environ["AWS_REGION"]
-    cross_account_role = event["cross_account_role"]
-    ssm_prefix = event["ssm_prefix"]
-    account_id = event.get("account_id", "")
+    ssm_prefix = os.environ["SSM_PREFIX"]
+    ecr_repo_name_filters = json.loads(os.environ["ECR_REPOSITORIES"])
+    lambda_s3_bucket = os.environ["LAMBDA_S3_BUCKET"]
+    lambda_s3_prefix = os.environ["LAMBDA_S3_PREFIX"]
+
     ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
-    ecr_repo_name_filters = event.get("ecr_repo_name_filters", [])
-    lambda_s3_bucket = event.get("lambda_s3_bucket", "")
-    lambda_s3_prefix = event.get("lambda_s3_prefix", "")
+    # ecr_repo_name_filters = event.get("ecr_repo_name_filters", [])
+    # lambda_s3_bucket = event.get("lambda_s3_bucket", "")
+    # lambda_s3_prefix = event.get("lambda_s3_prefix", "")
+    cross_account_role = event.get("cross_account_role", "")
+    account_id = event.get("account_id", "")
 
     lambda_versions = {}
     if lambda_s3_bucket and lambda_s3_prefix:
@@ -296,7 +303,9 @@ def lambda_handler(event, context):
     )
 
     credentials = (
-        assume_role(account_id, cross_account_role) if account_id else None
+        assume_role(account_id, cross_account_role)
+        if account_id and cross_account_role
+        else None
     )
 
     set_ssm_parameters_for_lambdas(
