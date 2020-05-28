@@ -25,10 +25,11 @@ resource "aws_lambda_function" "pipeline_set_version" {
   filename      = data.archive_file.lambda_src.output_path
   environment {
     variables = {
-      ECR_REPOSITORIES = jsonencode(var.ecr_repositories)
-      LAMBDA_S3_BUCKET = var.lambda_s3_bucket
-      LAMBDA_S3_PREFIX = var.lambda_s3_prefix
-      SSM_PREFIX       = var.name_prefix
+      ECR_IMAGE_TAG_FILTERS = jsonencode(var.ecr_image_tag_filters)
+      ECR_REPOSITORIES      = jsonencode(var.ecr_repositories)
+      LAMBDA_S3_BUCKET      = var.lambda_s3_bucket
+      LAMBDA_S3_PREFIX      = var.lambda_s3_prefix
+      SSM_PREFIX            = var.ssm_prefix
     }
   }
   source_code_hash = filebase64sha256(data.archive_file.lambda_src.output_path)
@@ -53,13 +54,11 @@ resource "aws_iam_role_policy" "ssm_to_lambda" {
 }
 
 resource "aws_iam_role_policy" "s3_to_lambda" {
-  count  = var.lambda_s3_bucket != "" && var.lambda_s3_prefix != "" ? 1 : 0
   policy = data.aws_iam_policy_document.s3_for_lambda.json
   role   = aws_iam_role.lambda_exec.id
 }
 
 resource "aws_iam_role_policy" "ecr_to_lambda" {
-  count  = length(var.ecr_repositories) > 0 ? 1 : 0
   policy = data.aws_iam_policy_document.ecr_for_lambda.json
   role   = aws_iam_role.lambda_exec.id
 }

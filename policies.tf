@@ -27,14 +27,13 @@ data "aws_iam_policy_document" "logs_for_lambda" {
   }
 }
 
-# TODO: Make this policy more strict
 data "aws_iam_policy_document" "ssm_for_lambda" {
   statement {
     effect = "Allow"
     actions = [
       "ssm:*",
     ]
-    resources = ["*"]
+    resources = ["arn:aws:ssm:${local.current_region}:${local.current_account_id}:parameter/${var.ssm_prefix}/*"]
   }
 }
 
@@ -50,7 +49,6 @@ data "aws_iam_policy_document" "ecr_for_lambda" {
     resources = local.ecr_arns
   }
 }
-
 
 data "aws_iam_policy_document" "s3_for_lambda" {
   statement {

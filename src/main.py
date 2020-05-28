@@ -280,15 +280,15 @@ def lambda_handler(event, context):
     logger.info("Lambda triggered with input data '%s'", json.dumps(event))
 
     region = os.environ["AWS_REGION"]
+
+    # Lambda constants
     ssm_prefix = os.environ["SSM_PREFIX"]
-    ecr_repo_name_filters = json.loads(os.environ["ECR_REPOSITORIES"])
+    ecr_image_tag_filters = json.loads(os.environ["ECR_IMAGE_TAG_FILTERS"])
+    ecr_repositories = json.loads(os.environ["ECR_REPOSITORIES"])
     lambda_s3_bucket = os.environ["LAMBDA_S3_BUCKET"]
     lambda_s3_prefix = os.environ["LAMBDA_S3_PREFIX"]
 
-    ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
-    # ecr_repo_name_filters = event.get("ecr_repo_name_filters", [])
-    # lambda_s3_bucket = event.get("lambda_s3_bucket", "")
-    # lambda_s3_prefix = event.get("lambda_s3_prefix", "")
+    # Dynamic Lambda inputs
     cross_account_role = event.get("cross_account_role", "")
     account_id = event.get("account_id", "")
 
@@ -298,9 +298,11 @@ def lambda_handler(event, context):
             lambda_s3_bucket, lambda_s3_prefix
         )
 
-    ecr_versions = get_ecr_versions(
-        ecr_repo_name_filters, ecr_image_tag_filters
-    )
+    ecr_versions = {}
+    if len(ecr_repositories):
+        ecr_versions = get_ecr_versions(
+            ecr_repositories, ecr_image_tag_filters
+        )
 
     credentials = (
         assume_role(account_id, cross_account_role)
