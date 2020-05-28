@@ -283,15 +283,14 @@ def lambda_handler(event, context):
 
     region = os.environ["AWS_REGION"]
 
-    # Lambda constants
     ssm_prefix = os.environ["SSM_PREFIX"]
-    ecr_image_tag_filters = json.loads(os.environ["ECR_IMAGE_TAG_FILTERS"])
-    ecr_repositories = json.loads(os.environ["ECR_REPOSITORIES"])
-    lambda_names = json.loads(os.environ["LAMBDA_NAMES"])
-    lambda_s3_bucket = os.environ["LAMBDA_S3_BUCKET"]
-    lambda_s3_prefix = os.environ["LAMBDA_S3_PREFIX"]
 
-    # Dynamic Lambda inputs
+    ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
+    ecr_repositories = event.get("ecr_repositories", [])
+    lambda_names = event.get("lambda_names", [])
+    lambda_s3_bucket = event.get("lambda_s3_bucket", "")
+    lambda_s3_prefix = event.get("lambda_s3_prefix", "")
+
     role_to_assume = event.get("role_to_assume", "")
     account_id = event.get("account_id", "")
 

@@ -7,8 +7,6 @@ data "aws_region" "current" {}
 locals {
   current_account_id = data.aws_caller_identity.current-account.account_id
   current_region     = data.aws_region.current.name
-  ecr_arns           = formatlist("arn:aws:ecr:${local.current_region}:${local.current_account_id}:repository/%s", var.ecr_repositories)
-  s3_arn             = "arn:aws:s3:::${var.lambda_s3_bucket}"
 }
 
 data "archive_file" "lambda_src" {
@@ -25,12 +23,7 @@ resource "aws_lambda_function" "pipeline_set_version" {
   filename      = data.archive_file.lambda_src.output_path
   environment {
     variables = {
-      ECR_IMAGE_TAG_FILTERS = jsonencode(var.ecr_image_tag_filters)
-      ECR_REPOSITORIES      = jsonencode(var.ecr_repositories)
-      LAMBDA_NAMES          = jsonencode(var.lambda_names)
-      LAMBDA_S3_BUCKET      = var.lambda_s3_bucket
-      LAMBDA_S3_PREFIX      = var.lambda_s3_prefix
-      SSM_PREFIX            = var.ssm_prefix
+      SSM_PREFIX = var.ssm_prefix
     }
   }
   source_code_hash = filebase64sha256(data.archive_file.lambda_src.output_path)
