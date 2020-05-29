@@ -14,7 +14,7 @@ The function assumes that each Lambda application exist in a given S3 bucket und
 The function lists all Lambda deployment packages located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/lambdas`) that follows the naming convention of `<application-name>/package.{jar,zip}`. An SSM parameter will be set per application with name `<application-name>` and value equal to the S3 version of the deployment package.
 
 ## Lambda Inputs
-All inputs are optional, but most of them will only have an effect if they are supplied together with one or more of the other inputs.
+Most inputs are optional, but some of them will only have an effect if they are supplied together with one or more of the other inputs.
 
 #### `account_id` (optional - requires `role_to_assume` to be set)
 The id of the account that owns the role `role_to_assume`. If not supplied, the function will simply run using its execution role.
@@ -37,5 +37,5 @@ The S3 prefix where Lambda deployment packages are stored.
 #### `role_to_assume` (optional - requires `account_id` to be set)
 The name of the role to assume. (Note: A policy should be attached to the the Lambda's execution role, exposed as an output in Terraform, that allows it to assume the role).
 
-#### `ssm_prefix` (optional)
-All parameters are namespaced under `/versions`, but an additional prefix can be supplied. E.g., a value `trafficinfo` will result in parameters being saved under `/versions/trafficinfo`. This allows the function to be reused across different environments without risk of overwriting the wrong SSM parameters.
+#### `ssm_prefix` (required)
+The prefix to use when creating/updating SSM parameters. To avoid accidental overwrites of wrong SSM parameters, the function is only allowed to operate on SSM parameters with a prefix matching `"/${var.name_prefix}/*"`, where `var.name_prefix` is a Terraform variable. An example value of `ssm_prefix` is `trafficinfo`.

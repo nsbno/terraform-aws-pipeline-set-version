@@ -33,7 +33,7 @@ data "aws_iam_policy_document" "ssm_for_lambda" {
     actions = [
       "ssm:*",
     ]
-    resources = ["arn:aws:ssm:${local.current_region}:${local.current_account_id}:parameter/${local.ssm_prefix}/*"]
+    resources = ["arn:aws:ssm:${local.current_region}:${local.current_account_id}:parameter/${var.name_prefix}/*"]
   }
 }
 

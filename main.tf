@@ -7,7 +7,6 @@ data "aws_region" "current" {}
 locals {
   current_account_id = data.aws_caller_identity.current-account.account_id
   current_region     = data.aws_region.current.name
-  ssm_prefix         = "versions"
 }
 
 data "archive_file" "lambda_src" {
@@ -17,16 +16,11 @@ data "archive_file" "lambda_src" {
 }
 
 resource "aws_lambda_function" "pipeline_set_version" {
-  function_name = "${var.name_prefix}-pipeline-set-version"
-  handler       = "main.lambda_handler"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "python3.7"
-  filename      = data.archive_file.lambda_src.output_path
-  environment {
-    variables = {
-      SSM_PREFIX = local.ssm_prefix
-    }
-  }
+  function_name    = "${var.name_prefix}-pipeline-set-version"
+  handler          = "main.lambda_handler"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "python3.7"
+  filename         = data.archive_file.lambda_src.output_path
   source_code_hash = filebase64sha256(data.archive_file.lambda_src.output_path)
   timeout          = 20
   tags             = var.tags

@@ -283,13 +283,7 @@ def lambda_handler(event, context):
 
     region = os.environ["AWS_REGION"]
 
-    main_ssm_prefix = os.environ["SSM_PREFIX"]
-    additional_ssm_prefix = event.get("ssm_prefix", "")
-    ssm_prefix = (
-        f"{main_ssm_prefix}/{additional_ssm_prefix}"
-        if additional_ssm_prefix
-        else main_ssm_prefix
-    )
+    ssm_prefix = event["ssm_prefix"]
 
     ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
     ecr_repositories = event.get("ecr_repositories", [])
