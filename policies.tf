@@ -27,49 +27,36 @@ data "aws_iam_policy_document" "logs_for_lambda" {
   }
 }
 
-# TODO: Make this policy more strict
 data "aws_iam_policy_document" "ssm_for_lambda" {
   statement {
     effect = "Allow"
     actions = [
       "ssm:*",
     ]
-    resources = ["*"]
+    resources = ["arn:aws:ssm:${local.current_region}:${local.current_account_id}:parameter/${var.name_prefix}/*"]
   }
 }
 
 data "aws_iam_policy_document" "ecr_for_lambda" {
-  # TODO: Restrict permissions to specific resources
   statement {
     effect    = "Allow"
-    actions   = ["ecr:Get*"]
+    actions   = ["ecr:DescribeRepositories"]
     resources = ["*"]
   }
   statement {
     effect    = "Allow"
-    actions   = ["ecr:List*"]
-    resources = ["*"]
-  }
-  statement {
-    effect    = "Allow"
-    actions   = ["ecr:Describe*"]
+    actions   = ["ecr:DescribeImages"]
     resources = ["*"]
   }
 }
 
-
 data "aws_iam_policy_document" "s3_for_lambda" {
-  # TODO: Restrict permissions to specific resources
   statement {
     effect    = "Allow"
-    actions   = ["s3:ListObjects"]
+    actions   = ["s3:GetObject", "s3:ListObjects"]
     resources = ["*"]
   }
-  statement {
-    effect    = "Allow"
-    actions   = ["s3:GetObject"]
-    resources = ["*"]
-  }
+
   statement {
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
