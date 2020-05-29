@@ -14,12 +14,28 @@ The function assumes that each Lambda application exist in a given S3 bucket und
 The function lists all Lambda deployment packages located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/lambdas`) that follows the naming convention of `<application-name>/package.{jar,zip}`. An SSM parameter will be set per application with name `<application-name>` and value equal to the S3 version of the deployment package.
 
 ## Lambda Inputs
-Most values are provided through Terraform variables that are added to the Lambda function as environment variables. To allow the Lambda to be used reused for updating parameters in multiple accounts, the Lambda function has two dynamic inputs. If these values are provided, a policy should be attached to the the Lambda's execution role (exposed as an output) that allows it to assume the role.
+All inputs are optional, but most of them will only have an effect if they are supplied together with one or more of the other inputs.
 
-If none of these values are provided, the function will simply run using its execution role.
+#### `account_id` (optional - requires `role_to_assume` to be set)
+The id of the account that owns the role `role_to_assume`. If not supplied, the function will simply run using its execution role.
 
-#### account_id (optional)
-The id of the account that owns the role `role_to_assume`.
+#### `ecr_image_tag_filters` (optional - requires `ecr_repositories` to be set)
+Require that only images tagged with certain tags are included when looking for the most recent image in an ECR repository (if set, `ecr_repositories` must also be set).
 
-#### role_to_assume (optional)
-The name of the role to assume.
+#### `ecr_repositories` (optional)
+The names of the ECR repositories containing Docker applications to set versions for.
+
+#### `lambda_names` (optional - requires all `lambda_*` inputs to be set)
+The names of the Lambda functions to set versions for.
+
+#### `lambda_s3_bucket` (optional - requires all `lambda_*` inputs to be set)
+The name of the S3 bucket containing Lambda deployment packages to set versions for.
+
+#### `lambda_s3_prefix` (optional - requires all `lambda_*` inputs to be set)
+The S3 prefix where Lambda deployment packages are stored.
+
+#### `role_to_assume` (optional - requires `account_id` to be set)
+The name of the role to assume. (Note: A policy should be attached to the the Lambda's execution role, exposed as an output in Terraform, that allows it to assume the role).
+
+#### `ssm_prefix` (optional)
+All parameters are namespaced under `/versions`, but an additional prefix can be supplied. E.g., a value `trafficinfo` will result in parameters being saved under `/versions/trafficinfo`. This allows the function to be reused across different environments without risk of overwriting the wrong SSM parameters.
