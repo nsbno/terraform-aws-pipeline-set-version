@@ -44,11 +44,6 @@ resource "aws_iam_role_policy" "lambda_to_state_machine" {
 #                                #
 ##################################
 module "set_version_lambda" {
-  source                = "github.com/nsbno/terraform-aws-pipeline-set-version" # Should be pinned to a specific ref
-  name_prefix           = local.name_prefix
-  ecr_image_tag_filters = ["master-branch"]
-  ecr_repositories      = ["${local.name_prefix}-docker-app"]
-  ssm_prefix            = "${local.name_prefix}/versions"
-  lambda_s3_bucket      = "example-bucket"
-  lambda_s3_prefix      = "lambdas"
+  source      = "github.com/nsbno/terraform-aws-pipeline-set-version" # Should be pinned to a specific ref
+  name_prefix = local.name_prefix
 }
