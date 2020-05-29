@@ -4,7 +4,7 @@ A Terraform module that creates a Lambda function that sets SSM parameters conta
 It is assumed that the artifact stores, i.e., the ECR repositories and the S3 bucket containing Lambda deployment packages, exist in the same account as where the Lambda function is created.
 
 ## Versioning of Docker applications
-The function assumes that each Docker application has a dedicated ECR repository where images are tagged with at least one tag `<commit-has>-SHA1`.
+The function assumes that each Docker application has a dedicated ECR repository where images are tagged with at least one tag `<commit-hash>-SHA1`.
 
 The function lists all ECR repositories in the current region of the current account, finds the most recently pushed image in each repository that is tagged with at least `<commit-hash>-SHA1` and sets an SSM parameter, either in the current account or by assuming a role in another account, with name `<name-of-ecr-repository>` and value `<commit-hash>`. Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent image in an ECR repository.
 
@@ -20,7 +20,7 @@ Most inputs are optional, but some of them will only have an effect if they are 
 The id of the account that owns the role `role_to_assume`. If not supplied, the function will simply run using its execution role.
 
 #### `ecr_image_tag_filters` (optional - requires `ecr_repositories` to be set)
-Require that only images tagged with certain tags are included when looking for the most recent image in an ECR repository (if set, `ecr_repositories` must also be set).
+Require that only images tagged with certain tags are included when looking for the most recent image in an ECR repository.
 
 #### `ecr_repositories` (optional)
 The names of the ECR repositories containing Docker applications to set versions for.
