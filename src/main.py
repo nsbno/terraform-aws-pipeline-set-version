@@ -19,6 +19,7 @@ import json
 import time
 import logging
 import os
+import re
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -173,7 +174,11 @@ def update_parameterstore(credentials, name, value, region):
 
 
 def get_s3_artifact_versions(
-    application_names, bucket_name, s3_prefix, allowed_filenames
+    application_names,
+    bucket_name,
+    s3_prefix,
+    allowed_key_patterns=[r"[a-z0-9]{7}\.(zip|jar)$"],
+    artifact_tag_filters=[],
 ):
     """Gets the S3 version of application artifacts stored under a given S3 prefix.
 
@@ -193,42 +198,84 @@ def get_s3_artifact_versions(
         S3 version of the artifact.
     """
     s3 = boto3.client("s3")
-    contents_of_folder = s3.list_objects(Bucket=bucket_name, Prefix=s3_prefix)
-
-    try:
-        content = contents_of_folder["Contents"]
-    except KeyError:
-        # 'Contents' key will be missing from response if no matching
-        # objects were found
-        logger.info(
-            "Did not find any objects in bucket '%s' matching the prefix '%s'",
-            bucket_name,
-            s3_prefix,
-        )
-        return {}
-
-    s3_files = list(map(lambda s3_file: s3_file["Key"], content))
-    logger.info("Found S3 files '%s'", s3_files)
-    s3_zips = list(
-        filter(
-            lambda key: key.rsplit("/", 2)[1] in application_names
-            and key.rsplit("/", 1) != s3_prefix
-            and (
-                any(
-                    key.endswith(f"/{filename}")
-                    for filename in allowed_filenames
-                )
-            ),
-            s3_files,
-        )
-    )
-    logger.info("Found zip files '%s'", s3_zips)
-
     s3_resource = boto3.resource("s3")
-    versions = {
-        s3_key: s3_resource.Object(bucket_name, s3_key).version_id
-        for s3_key in s3_zips
-    }
+    versions = {}
+
+    for application_name in application_names:
+        prefix = f"{s3_prefix}/{application_name}"
+        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        try:
+            objects = response["Contents"]
+        except KeyError:
+            logger.info(
+                "Did not find any objects in bucket '%s' matching the prefix '%s'",
+                bucket_name,
+                prefix,
+            )
+            continue
+
+        while response["IsTruncated"]:
+            objects = objects + response["Contents"]
+            response = s3.list_objects_v2(
+                Bucket=bucket_name,
+                ContinuationToken=response["NextContinuationToken"],
+                Prefix=prefix,
+            )
+        logger.info(
+            "Found a total of %s objects under prefix '%s' %s",
+            len(objects),
+            f"{bucket_name}/{prefix}",
+            objects,
+        )
+        valid_objects = list(
+            filter(
+                lambda obj: any(
+                    re.search(pattern, obj["Key"])
+                    for pattern in allowed_key_patterns
+                ),
+                objects,
+            )
+        )
+        logger.info(
+            "Found %s valid objects under prefix '%s' %s",
+            len(valid_objects),
+            f"{bucket_name}/{prefix}",
+            valid_objects,
+        )
+        sorted_objects = sorted(
+            valid_objects,
+            key=lambda obj: obj["LastModified"].timestamp(),
+            reverse=True,
+        )
+        if len(sorted_objects):
+            for obj in sorted_objects:
+                metadata = s3_resource.Object(bucket_name, obj["Key"]).metadata
+                logger.info(
+                    "Object with key '%s' has metadata '%s'",
+                    obj["Key"],
+                    metadata,
+                )
+                tags = (
+                    json.loads(metadata["tags"])
+                    if metadata.get("tags", None)
+                    else None
+                )
+                if (
+                    tags
+                    and any(tag.endswith("-SHA1") for tag in tags)
+                    and all(tag in tags for tag in artifact_tag_filters)
+                ):
+                    version = next(
+                        (
+                            tag.split("-SHA1")[0]
+                            for tag in tags
+                            if tag.endswith("-SHA1")
+                        ),
+                        None,
+                    )
+                    if version:
+                        versions[application_name] = version
+                        break
 
     logger.info("Found versions '%s'", versions)
     return versions
@@ -259,9 +306,7 @@ def set_ssm_parameters_for_s3_artifacts(
         update_parameterstore(credentials, ssm_name, s3_version, region)
 
 
-def set_ssm_parameters_for_ecr_repos(
-    credentials, ecr_versions, ssm_prefix, region
-):
+def set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region):
     """Updates (or creates) one parameter in parameter store for each
     pair of ECR repository and version passed in.
 
@@ -309,7 +354,8 @@ def lambda_handler(event, context):
             lambda_names,
             lambda_s3_bucket,
             lambda_s3_prefix,
-            ["package.jar", "package.zip"],
+            [r"/[a-z0-9]{7}\.(zip|jar)$"],
+            artifact_tag_filters=["master-branch"],
         )
 
     frontend_versions = {}
@@ -318,7 +364,8 @@ def lambda_handler(event, context):
             frontend_names,
             frontend_s3_bucket,
             frontend_s3_prefix,
-            ["bundle.zip"],
+            [r"/[a-z0-9]{7}\.zip$"],
+            artifact_tag_filters=["master-branch"],
         )
 
     ecr_versions = {}
@@ -333,15 +380,9 @@ def lambda_handler(event, context):
         else None
     )
 
-    set_ssm_parameters_for_s3_artifacts(
-        credentials, lambda_versions, ssm_prefix, region
-    )
-    set_ssm_parameters_for_s3_artifacts(
-        credentials, frontend_versions, ssm_prefix, region
-    )
-    set_ssm_parameters_for_ecr_repos(
-        credentials, ecr_versions, ssm_prefix, region
-    )
+    set_ssm_parameters(credentials, lambda_versions, ssm_prefix, region)
+    set_ssm_parameters(credentials, frontend_versions, ssm_prefix, region)
+    set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
 
     # TODO: Upload a metafile that contains the mapping between SHA1 and S3 version
     # lambda_meta = json.dumps({[{"lambda": l, "sha1": sha1, "s3_version": versions[l]} for l in versions]
