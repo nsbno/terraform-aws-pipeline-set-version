@@ -338,10 +338,12 @@ def lambda_handler(event, context):
     ecr_repositories = event.get("ecr_repositories", [])
 
     lambda_names = event.get("lambda_names", [])
+    lambda_tag_filters = event.get("lambda_tag_filters", [])
     lambda_s3_bucket = event.get("lambda_s3_bucket", "")
     lambda_s3_prefix = event.get("lambda_s3_prefix", "")
 
     frontend_names = event.get("frontend_names", [])
+    frontend_tag_filters = event.get("frontend_tag_filters", [])
     frontend_s3_bucket = event.get("frontend_s3_bucket", "")
     frontend_s3_prefix = event.get("frontend_s3_prefix", "")
 
@@ -355,7 +357,7 @@ def lambda_handler(event, context):
             lambda_s3_bucket,
             lambda_s3_prefix,
             [r"/[a-z0-9]{7}\.(zip|jar)$"],
-            artifact_tag_filters=["master-branch"],
+            artifact_tag_filters=lambda_tag_filters,
         )
 
     frontend_versions = {}
@@ -365,7 +367,7 @@ def lambda_handler(event, context):
             frontend_s3_bucket,
             frontend_s3_prefix,
             [r"/[a-z0-9]{7}\.zip$"],
-            artifact_tag_filters=["master-branch"],
+            artifact_tag_filters=frontend_tag_filters,
         )
 
     ecr_versions = {}
