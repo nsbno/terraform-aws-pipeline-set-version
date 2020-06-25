@@ -370,6 +370,14 @@ def lambda_handler(event, context):
             ecr_repositories, ecr_image_tag_filters
         )
 
+    if len(
+        set().union(ecr_versions, frontend_versions, lambda_versions)
+    ) != len(ecr_versions) + len(frontend_versions) + len(lambda_versions):
+        logger.error(
+            "One or more ECR, Lambda and/or frontend applications are sharing the same name"
+        )
+        raise ValueError()
+
     if set_versions:
         credentials = (
             assume_role(account_id, role_to_assume)
