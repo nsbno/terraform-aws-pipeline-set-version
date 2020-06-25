@@ -333,12 +333,13 @@ def lambda_handler(event, context):
     account_id = event.get("account_id", "")
 
     versions = event.get("versions", {})
-    ecr_versions = versions.get("ecr", {})
-    frontend_versions = versions.get("frontend", {})
-    lambda_versions = versions.get("lambda", {})
+    ecr_versions = versions.get("ecr", None)
+    frontend_versions = versions.get("frontend", None)
+    lambda_versions = versions.get("lambda", None)
 
     if (
         not set_versions
+        and lambda_versions is None
         and lambda_s3_bucket
         and lambda_s3_prefix
         and len(lambda_names)
@@ -353,6 +354,7 @@ def lambda_handler(event, context):
 
     if (
         not set_versions
+        and frontend_versions is None
         and frontend_s3_bucket
         and frontend_s3_prefix
         and len(frontend_names)
@@ -365,7 +367,7 @@ def lambda_handler(event, context):
             artifact_tag_filters=frontend_tag_filters,
         )
 
-    if not set_versions and len(ecr_repositories):
+    if not set_versions and ecr_versions is None and len(ecr_repositories):
         ecr_versions = get_ecr_versions(
             ecr_repositories, ecr_image_tag_filters
         )
