@@ -299,14 +299,13 @@ def set_ssm_parameters_for_s3_artifacts(
             (e.g., `trafficinfo`).
         region: The region to use when creating the SSM client.
     """
-
     for s3_key, s3_version in artifact_versions.items():
         app_name = s3_key.rsplit("/", 2)[1]
         ssm_name = f"/{ssm_prefix}/{app_name}"
         update_parameterstore(credentials, ssm_name, s3_version, region)
 
 
-def set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region):
+def set_ssm_parameters(credentials, versions, ssm_prefix, region):
     """Updates (or creates) one parameter in parameter store for each
     pair of ECR repository and version passed in.
 
@@ -322,7 +321,11 @@ def set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region):
             (e.g., `trafficinfo`).
         region: The region to use when creating the SSM client.
     """
-    for repo, version in ecr_versions.items():
+    if len(ssm_prefix) == 0 or ssm_prefix.lower().startswith("aws"):
+        logger.error("SSM prefix '%s' is not valid", ssm_prefix)
+        raise ValueError()
+
+    for repo, version in versions.items():
         ssm_name = f"/{ssm_prefix}/{repo}"
         update_parameterstore(credentials, ssm_name, version, region)
 
@@ -332,7 +335,9 @@ def lambda_handler(event, context):
 
     region = os.environ["AWS_REGION"]
 
-    ssm_prefix = event["ssm_prefix"]
+    ssm_prefix = event.get("ssm_prefix", "")
+
+    set_versions = event.get("set_versions", True)
 
     ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
     ecr_repositories = event.get("ecr_repositories", [])
@@ -350,8 +355,17 @@ def lambda_handler(event, context):
     role_to_assume = event.get("role_to_assume", "")
     account_id = event.get("account_id", "")
 
-    lambda_versions = {}
-    if lambda_s3_bucket and lambda_s3_prefix and len(lambda_names):
+    versions = event.get("versions", {})
+    ecr_versions = versions.get("ecr", {})
+    frontend_versions = versions.get("frontend", {})
+    lambda_versions = versions.get("lambda", {})
+
+    if (
+        not set_versions
+        and lambda_s3_bucket
+        and lambda_s3_prefix
+        and len(lambda_names)
+    ):
         lambda_versions = get_s3_artifact_versions(
             lambda_names,
             lambda_s3_bucket,
@@ -360,8 +374,12 @@ def lambda_handler(event, context):
             artifact_tag_filters=lambda_tag_filters,
         )
 
-    frontend_versions = {}
-    if frontend_s3_bucket and frontend_s3_prefix and len(frontend_names):
+    if (
+        not set_versions
+        and frontend_s3_bucket
+        and frontend_s3_prefix
+        and len(frontend_names)
+    ):
         frontend_versions = get_s3_artifact_versions(
             frontend_names,
             frontend_s3_bucket,
@@ -370,22 +388,26 @@ def lambda_handler(event, context):
             artifact_tag_filters=frontend_tag_filters,
         )
 
-    ecr_versions = {}
-    if len(ecr_repositories):
+    if not set_versions and len(ecr_repositories):
         ecr_versions = get_ecr_versions(
             ecr_repositories, ecr_image_tag_filters
         )
 
-    credentials = (
-        assume_role(account_id, role_to_assume)
-        if account_id and role_to_assume
-        else None
-    )
-
-    set_ssm_parameters(credentials, lambda_versions, ssm_prefix, region)
-    set_ssm_parameters(credentials, frontend_versions, ssm_prefix, region)
-    set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
+    if set_versions:
+        credentials = (
+            assume_role(account_id, role_to_assume)
+            if account_id and role_to_assume
+            else None
+        )
+        set_ssm_parameters(credentials, lambda_versions, ssm_prefix, region)
+        set_ssm_parameters(credentials, frontend_versions, ssm_prefix, region)
+        set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
 
     # TODO: Upload a metafile that contains the mapping between SHA1 and S3 version
     # lambda_meta = json.dumps({[{"lambda": l, "sha1": sha1, "s3_version": versions[l]} for l in versions]
-    return
+    return {
+        "ecr": ecr_versions,
+        "frontend": frontend_versions,
+        "lambda": lambda_versions,
+    }
+
