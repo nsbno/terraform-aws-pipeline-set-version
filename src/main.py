@@ -183,19 +183,20 @@ def get_s3_artifact_versions(
     """Gets the S3 version of application artifacts stored under a given S3 prefix.
 
     A file located under the prefix is treated as an application artifact iff it is inside a
-    dedicated folder and contains a file with a specific filename.
-    (e.g., `nsbno/trafficinfo-aws/lambdas/<application-name>/package.zip`).
+    dedicated folder and contains a file that follows a pattern.
+    (e.g., `nsbno/trafficinfo-aws/lambdas/<application-name>/<sha1>.zip`).
 
     Args:
         application_names: The name of the applications to set versions for.
         bucket_name: The name of the S3 bucket to use when looking for application artifacts.
         s3_prefix: The S3 prefix to use when looking for application artifacts
             (e.g., `nsbno/trafficinfo-aws/lambdas`).
-        allowed_filenames: Allowed filenames for application artifacts (e.g., `package.jar`, `package.zip`, `bundle.zip`)
+        allowed_key_patterns: Allowed S3 key patterns for application artifacts.
+        artifact_tag_filters: An optional list of S3 metadata tags to filter artifacts on (e.g., ["master-branch"]).
 
     Returns:
-        A dictionary containing the S3 keys of the application artifacts together with the
-        S3 version of the artifact.
+        A dictionary containing the application names together with the
+        SHA1 of the latest artifact.
     """
     s3 = boto3.client("s3")
     s3_resource = boto3.resource("s3")
@@ -281,33 +282,9 @@ def get_s3_artifact_versions(
     return versions
 
 
-def set_ssm_parameters_for_s3_artifacts(
-    credentials, artifact_versions, ssm_prefix, region
-):
-    """Updates (or creates) one parameter in parameter store for each
-    pair of S3 key and version passed in.
-
-    Example: The versions in the following dict would result in a parameter with
-        name "hello-world" and value "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B":
-        `{"nsbno/trafficinfo-aws/lambdas/hello-world/package.zip": "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B"}`
-
-    Args:
-        credentials: The credentials to use when creating the SSM client.
-        artifact_versions: A dictionary containing the S3 key of application artifacts
-            as well as their S3 version.
-        ssm_prefix: The prefix to use for the parameters in parameter store
-            (e.g., `trafficinfo`).
-        region: The region to use when creating the SSM client.
-    """
-    for s3_key, s3_version in artifact_versions.items():
-        app_name = s3_key.rsplit("/", 2)[1]
-        ssm_name = f"/{ssm_prefix}/{app_name}"
-        update_parameterstore(credentials, ssm_name, s3_version, region)
-
-
 def set_ssm_parameters(credentials, versions, ssm_prefix, region):
     """Updates (or creates) one parameter in parameter store for each
-    pair of ECR repository and version passed in.
+    pair of application and version passed in.
 
     Example: The versions in the following dict would result in a parameter with
         name "trafficinfo-docker-app" and value "abcdefgh-SHA1":
@@ -315,8 +292,8 @@ def set_ssm_parameters(credentials, versions, ssm_prefix, region):
 
     Args:
         credentials: The credentials to use when creating the SSM client.
-        lambda_versions: A dictionary containing the names of ECR
-            repositories as well as their version.
+        versions: A dictionary containing the names of applications
+            as well as their version.
         ssm_prefix: The prefix to use for the parameters in parameter store
             (e.g., `trafficinfo`).
         region: The region to use when creating the SSM client.
@@ -403,8 +380,6 @@ def lambda_handler(event, context):
         set_ssm_parameters(credentials, frontend_versions, ssm_prefix, region)
         set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
 
-    # TODO: Upload a metafile that contains the mapping between SHA1 and S3 version
-    # lambda_meta = json.dumps({[{"lambda": l, "sha1": sha1, "s3_version": versions[l]} for l in versions]
     return {
         "ecr": ecr_versions,
         "frontend": frontend_versions,
