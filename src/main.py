@@ -379,7 +379,7 @@ def lambda_handler(event, context):
             logger.error(
                 "One or more ECR, Lambda and/or frontend applications are sharing the same name"
             )
-        raise ValueError()
+            raise ValueError()
         credentials = (
             assume_role(account_id, role_to_assume)
             if account_id and role_to_assume
@@ -390,8 +390,8 @@ def lambda_handler(event, context):
         set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
 
     return {
-        "ecr": ecr_versions,
-        "frontend": frontend_versions,
-        "lambda": lambda_versions,
+        "ecr": ecr_versions or {},
+        "frontend": frontend_versions or {},
+        "lambda": lambda_versions or {},
     }
 
