@@ -287,8 +287,8 @@ def set_ssm_parameters(credentials, versions, ssm_prefix, region):
     pair of application and version passed in.
 
     Example: The versions in the following dict would result in a parameter with
-        name "trafficinfo-docker-app" and value "abcdefgh-SHA1":
-        `{"trafficinfo-docker-app": "acdefgh-SHA1"}`
+        name "/<ssm-prefix>/trafficinfo-docker-app" and value "abcdefgh":
+        `{"trafficinfo-docker-app": "acdefgh"}`
 
     Args:
         credentials: The credentials to use when creating the SSM client.
@@ -302,8 +302,8 @@ def set_ssm_parameters(credentials, versions, ssm_prefix, region):
         logger.error("SSM prefix '%s' is not valid", ssm_prefix)
         raise ValueError()
 
-    for repo, version in versions.items():
-        ssm_name = f"/{ssm_prefix}/{repo}"
+    for application, version in versions.items():
+        ssm_name = f"/{ssm_prefix}/{application}"
         update_parameterstore(credentials, ssm_name, version, region)
 
 
