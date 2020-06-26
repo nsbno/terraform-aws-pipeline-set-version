@@ -1,9 +1,11 @@
 # terraform-aws-pipeline-set-version
-A Terraform module that creates a Lambda function that can either fetch and return the latest application versions, update SSM parameters with the latest application versions, or both. The Lambda supports fetching versions of applications hosted in ECR or S3 (e.g., Docker, Lambda and static frontend applications).
+A Terraform module that creates a Lambda function that can a) fetch and return the latest application versions or b) update SSM parameters with the latest application versions, or both. The Lambda supports fetching versions of applications hosted in ECR or S3 (e.g., Docker, Lambda and static frontend applications).
 
 The main use-case is to run the function as a task in a CD pipeline implemented using AWS Step Functions, and reference the parameters in Terraform code that is deployed at a later point in the pipeline.
 
 It is assumed that the artifact stores, i.e., the ECR repositories and the S3 bucket containing Lambda deployment packages and frontend bundles, exist in the same account as where the function is created.
+
+When the Lambda is configured to set versions, an SSM parameter will be set per application with name `<application-name>` and value equal to the commit hash of the application artifact.
 
 ## Versioning of Docker applications
 The function assumes that each Docker application has a dedicated ECR repository where images are tagged with at least one tag `<commit-hash>-SHA1`.
@@ -13,14 +15,13 @@ The function lists all ECR repositories in the current region of the current acc
 ## Versioning of frontend applications
 The function assumes that each frontend application exist in a given S3 bucket under a specific prefix, is packaged as a ZIP file and has user-defined metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
 
-The function lists all frontend bundles located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/frontends`) that follows the naming convention of `<application-name>/<commit-hash>.zip`, where `<commit-hash>` is the first seven characters of a commit hash.
+The function lists all frontend bundles located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/frontends`) that follows the naming convention of `<application-name>/<commit-hash>.zip`.
 
 ## Versioning of Lambda applications
 The function assumes that each Lambda application exist in a given S3 bucket under a specific prefix, is packaged as either a JAR or a ZIP file and has user-defined metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
 
-The function lists all Lambda deployment packages located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/lambdas`) that follows the naming convention of `<application-name>/<commit-hash>.{jar,zip}`, where `<commit-hash>` is the first seven characters of a commit hash.
+The function lists all Lambda deployment packages located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/lambdas`) that follows the naming convention of `<application-name>/<commit-hash>.{jar,zip}`.
 
-An SSM parameter will be set per application with name `<application-name>` and value equal to the commit hash of the deployment package.
 
 ## Lambda Inputs
 Most inputs are optional, but some of them will only have an effect if they are supplied together with one or more of the other inputs.
@@ -64,8 +65,11 @@ The name of the role to assume. (Note: A policy should be attached to the the La
 #### `ssm_prefix` (optional - required if `set_versions` is `True`)
 The prefix to use when creating/updating SSM parameters. To avoid accidental overwrites of wrong SSM parameters, the function is only allowed to operate on SSM parameters with a prefix matching `"/${var.name_prefix}/*"`, where `var.name_prefix` is a Terraform variable. An example value of `ssm_prefix` is `trafficinfo`.
 
+#### `get_versions` (optional)
+If this is set to `true`, the Lambda will search through the artifact stores and find the latest versions of all applications defined in the input. If set to `false`, however, the Lambda will instead use application versions that are passed in by the user.
+
 #### `set_versions` (optional)
-If this is set to `false`, the Lambda will only fetch and return the latest versions of all applications -- no SSM parameters will be updated. If set to `true`, however, SSM parameters will be updated using either versions supplied as input using the `versions` parameter or by fetching during runtime.
+If this is set to `true`, the Lambda will write to SSM parameters using either versions supplied as input using the `versions` parameter or by fetching during runtime.
 
 #### `versions` (optional)
-An object containing application versions to set, e.g., `{ "versions": { "ecr": { "<app-name>": "abcd123" } } }`. If `versions` is set, the Lambda will not fetch versions for the application type (e.g., `ecr`) supplied and instead use the versions that have been passed in.
+An object containing application versions to set, e.g., `{ "versions": { "ecr": { "<app-name>": "abcd123" } } }`.
