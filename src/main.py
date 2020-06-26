@@ -314,6 +314,7 @@ def lambda_handler(event, context):
 
     ssm_prefix = event.get("ssm_prefix", "")
 
+    get_versions = event.get("get_versions", True)
     set_versions = event.get("set_versions", True)
 
     ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
@@ -333,13 +334,12 @@ def lambda_handler(event, context):
     account_id = event.get("account_id", "")
 
     versions = event.get("versions", {})
-    ecr_versions = versions.get("ecr", None)
-    frontend_versions = versions.get("frontend", None)
-    lambda_versions = versions.get("lambda", None)
+    ecr_versions = versions.get("ecr", {})
+    frontend_versions = versions.get("frontend", {})
+    lambda_versions = versions.get("lambda", {})
 
     if (
-        not set_versions
-        and lambda_versions is None
+        get_versions
         and lambda_s3_bucket
         and lambda_s3_prefix
         and len(lambda_names)
@@ -348,13 +348,12 @@ def lambda_handler(event, context):
             lambda_names,
             lambda_s3_bucket,
             lambda_s3_prefix,
-            [r"/[a-z0-9]{7}\.(zip|jar)$"],
+            [r"/[a-z0-9]{7,}\.(zip|jar)$"],
             artifact_tag_filters=lambda_tag_filters,
         )
 
     if (
-        not set_versions
-        and frontend_versions is None
+        get_versions
         and frontend_s3_bucket
         and frontend_s3_prefix
         and len(frontend_names)
@@ -363,11 +362,11 @@ def lambda_handler(event, context):
             frontend_names,
             frontend_s3_bucket,
             frontend_s3_prefix,
-            [r"/[a-z0-9]{7}\.zip$"],
+            [r"/[a-z0-9]{7,}\.zip$"],
             artifact_tag_filters=frontend_tag_filters,
         )
 
-    if not set_versions and ecr_versions is None and len(ecr_repositories):
+    if get_versions and len(ecr_repositories):
         ecr_versions = get_ecr_versions(
             ecr_repositories, ecr_image_tag_filters
         )
@@ -390,8 +389,7 @@ def lambda_handler(event, context):
         set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
 
     return {
-        "ecr": ecr_versions or {},
-        "frontend": frontend_versions or {},
-        "lambda": lambda_versions or {},
+        "ecr": ecr_versions,
+        "frontend": frontend_versions,
+        "lambda": lambda_versions,
     }
-
