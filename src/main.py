@@ -216,12 +216,12 @@ def get_s3_artifact_versions(
             continue
 
         while response["IsTruncated"]:
-            objects = objects + response["Contents"]
             response = s3.list_objects_v2(
                 Bucket=bucket_name,
                 ContinuationToken=response["NextContinuationToken"],
                 Prefix=prefix,
             )
+            objects = objects + response["Contents"]
         logger.info(
             "Found a total of %s objects under prefix '%s' %s",
             len(objects),
