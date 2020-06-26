@@ -203,7 +203,7 @@ def get_s3_artifact_versions(
     versions = {}
 
     for application_name in application_names:
-        prefix = f"{s3_prefix}/{application_name}"
+        prefix = f"{s3_prefix}/{application_name}/"
         response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
         try:
             objects = response["Contents"]
