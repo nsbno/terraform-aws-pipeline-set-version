@@ -203,7 +203,7 @@ def get_s3_artifact_versions(
     versions = {}
 
     for application_name in application_names:
-        prefix = f"{s3_prefix}/{application_name}/"
+        prefix = f"{s3_prefix + '/' if s3_prefix else ''}{application_name}/"
         response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
         try:
             objects = response["Contents"]
@@ -338,12 +338,7 @@ def lambda_handler(event, context):
     frontend_versions = versions.get("frontend", {})
     lambda_versions = versions.get("lambda", {})
 
-    if (
-        get_versions
-        and lambda_s3_bucket
-        and lambda_s3_prefix
-        and len(lambda_names)
-    ):
+    if get_versions and lambda_s3_bucket and len(lambda_names):
         lambda_versions = get_s3_artifact_versions(
             lambda_names,
             lambda_s3_bucket,
@@ -352,12 +347,7 @@ def lambda_handler(event, context):
             artifact_tag_filters=lambda_tag_filters,
         )
 
-    if (
-        get_versions
-        and frontend_s3_bucket
-        and frontend_s3_prefix
-        and len(frontend_names)
-    ):
+    if get_versions and frontend_s3_bucket and len(frontend_names):
         frontend_versions = get_s3_artifact_versions(
             frontend_names,
             frontend_s3_bucket,
