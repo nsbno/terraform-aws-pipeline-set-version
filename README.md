@@ -1,27 +1,30 @@
 # terraform-aws-pipeline-set-version
-A Terraform module that creates a Lambda function that can a) fetch and return the latest application versions or b) update SSM parameters with the latest application versions, or both. The Lambda supports fetching versions of applications hosted in ECR or S3 (e.g., Docker, Lambda and static frontend applications).
+A Terraform module that creates a Lambda function that can a) fetch the latest application versions based on a set of artifact repositories or b) update SSM parameters with fetched or user-supplied application versions. The Lambda supports fetching versions of artifacts hosted in ECR or S3 (e.g., Docker, Lambda and static frontend applications).
 
 The main use-case is to run the function as a task in a CD pipeline implemented using AWS Step Functions, and reference the parameters in Terraform code that is deployed at a later point in the pipeline.
 
-It is assumed that the artifact stores, i.e., the ECR repositories and the S3 bucket containing Lambda deployment packages and frontend bundles, exist in the same account as where the function is created.
-
-When the Lambda is configured to set versions, an SSM parameter will be set per application with name `<application-name>` and value equal to the commit hash of the application artifact.
+When the Lambda is configured to set versions, an optional role will be assumed (e.g., in a `test`, `stage` or `prod` account), and an SSM parameter will be set per application with name `<application-name>` and value equal to the commit hash of the application artifact. The application name is derived from the names of the ECR repositories for Docker applications and S3 prefixes for Lambda and frontend applications.
 
 ## Versioning of Docker applications
 The function assumes that each Docker application has a dedicated ECR repository where images are tagged with at least one tag `<commit-hash>-SHA1`.
 
-The function lists all ECR repositories in the current region of the current account, finds the most recently pushed image in each repository that is tagged with at least `<commit-hash>-SHA1` and sets an SSM parameter, either in the current account or by assuming a role in another account, with name `<name-of-ecr-repository>` and value `<commit-hash>`. Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent image in an ECR repository.
+When the function is configured to fetch latest versions, it will list all ECR repositories in the current region of the current account and locate the most recently pushed image in each repository that is tagged with at least `<commit-hash>-SHA1`.
+
+Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent image in an ECR repository.
 
 ## Versioning of frontend applications
-The function assumes that each frontend application exist in a given S3 bucket under a specific prefix, is packaged as a ZIP file and has user-defined metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
+The function assumes that each frontend application exist in a given S3 bucket under a specific prefix, is packaged as a ZIP file and has user-defined S3 metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
 
-The function lists all frontend bundles located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/frontends`) that follows the naming convention of `<application-name>/<commit-hash>.zip`.
+When the function is configured to fetch latest versions, it will list all frontend bundles located in a given S3 bucket (e.g., `artifacts`) under a specific prefix (e.g., `frontends`) that follow the naming convention of `<application-name>/<commit-hash>.zip`.
+
+Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent artifact in S3.
 
 ## Versioning of Lambda applications
-The function assumes that each Lambda application exist in a given S3 bucket under a specific prefix, is packaged as either a JAR or a ZIP file and has user-defined metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
+The function assumes that each Lambda application exist in a given S3 bucket under a specific prefix, is packaged as either a JAR or a ZIP file and has user-defined S3 metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
 
-The function lists all Lambda deployment packages located in a given S3 bucket under a specific prefix (e.g., `<github_org>/<github_repo>/lambdas`) that follows the naming convention of `<application-name>/<commit-hash>.{jar,zip}`.
+When the function is configured to fetch latest versions, it will list all Lambda deployment packages located in a given S3 bucket (e.g., `artifacts`) under a specific prefix (e.g., `lambdas`) that follow the naming convention of `<application-name>/<commit-hash>.{jar,zip}`.
 
+Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent artifact in S3.
 
 ## Lambda Inputs
 Most inputs are optional, but some of them will only have an effect if they are supplied together with one or more of the other inputs.
@@ -45,7 +48,7 @@ The name of the S3 bucket containing frontend bundles to set versions for.
 The S3 prefix where frontend bundles are stored.
 
 #### `frontend_tag_filters` (optional - requires all `frontend_*` inputs to be set)
-Require that only artifacts that contains specific tags in the user-defined metadata `tags` are included when looking for the most recent artifact.
+Require that only artifacts that contains specific tags in the user-defined S3 metadata `tags` are included when looking for the most recent artifact.
 
 #### `lambda_names` (optional - requires all `lambda_*` inputs to be set)
 The names of the Lambda functions to set versions for.
@@ -57,7 +60,7 @@ The name of the S3 bucket containing Lambda deployment packages to set versions 
 The S3 prefix where Lambda deployment packages are stored.
 
 #### `lambda_tag_filters` (optional - requires all `lambda_*` inputs to be set)
-Require that only artifacts that contains specific tags in the user-defined metadata `tags` are included when looking for the most recent artifact.
+Require that only artifacts that contains specific tags in the user-defined S3 metadata `tags` are included when looking for the most recent artifact.
 
 #### `role_to_assume` (optional - requires `account_id` to be set)
 The name of the role to assume. (Note: A policy should be attached to the the Lambda's execution role, exposed as an output in Terraform, that allows it to assume the role).
