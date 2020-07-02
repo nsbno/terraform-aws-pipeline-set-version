@@ -13,14 +13,14 @@ When the function is configured to fetch latest versions, it will list all ECR r
 Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent image in an ECR repository.
 
 ## Versioning of frontend applications
-The function assumes that each frontend application exist in a given S3 bucket under a specific prefix, is packaged as a ZIP file and has user-defined S3 metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
+The function assumes that each frontend application exist in a given S3 bucket under a specific prefix, is packaged as a ZIP file and has user-defined S3 metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`. The metadata values can be added by using the `--metadata` flag of the `aws-cli` when uploading the artifact, e.g., `aws s3 cp <commit-hash>.zip s3://<bucket-name>/frontends --metadata "tags"="'[\"<commit-hash>-SHA1\",\"<branch-name>-branch\"]'"`.
 
 When the function is configured to fetch latest versions, it will list all frontend bundles located in a given S3 bucket (e.g., `artifacts`) under a specific prefix (e.g., `frontends`) that follow the naming convention of `<application-name>/<commit-hash>.zip`.
 
 Additional tags can also be enforced, such that only images tagged with `<commit-hash>-SHA1` **and** `master-branch` are included when locating the most recent artifact in S3.
 
 ## Versioning of Lambda applications
-The function assumes that each Lambda application exist in a given S3 bucket under a specific prefix, is packaged as either a JAR or a ZIP file and has user-defined S3 metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`.
+The function assumes that each Lambda application exist in a given S3 bucket under a specific prefix, is packaged as either a JAR or a ZIP file and has user-defined S3 metadata `tags` containing at least the value `["<commit-hash>-SHA1"]`. The metadata values can be added by using the `--metadata` flag of the `aws-cli` when uploading the artifact, e.g., `aws s3 cp <commit-hash>.zip s3://<bucket-name>/lambdas --metadata "tags"="'[\"<commit-hash>-SHA1\",\"<branch-name>-branch\"]'"`.
 
 When the function is configured to fetch latest versions, it will list all Lambda deployment packages located in a given S3 bucket (e.g., `artifacts`) under a specific prefix (e.g., `lambdas`) that follow the naming convention of `<application-name>/<commit-hash>.{jar,zip}`.
 
