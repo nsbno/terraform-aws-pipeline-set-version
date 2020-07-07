@@ -19,6 +19,7 @@ import json
 import time
 import logging
 import os
+import re
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -172,109 +173,137 @@ def update_parameterstore(credentials, name, value, region):
     ssm.put_parameter(Name=name, Value=value, Type="String", Overwrite=True)
 
 
-def get_lambda_versions(lambda_names, bucket_name, s3_prefix):
-    """Gets the S3 version of all Lambda deployment packages located under a given S3 prefix.
+def get_s3_artifact_versions(
+    application_names,
+    bucket_name,
+    s3_prefix,
+    allowed_key_patterns=[r"[a-z0-9]{7}\.(zip|jar)$"],
+    artifact_tag_filters=[],
+):
+    """Gets the S3 version of application artifacts stored under a given S3 prefix.
 
-    A deployment package located under the prefix is treated as a Lambda iff it is inside a
-    folder and contains a file named `package.jar` or `package.zip`
-    (e.g., `nsbno/trafficinfo-aws/lambdas/<function-name>/package.zip`).
+    A file located under the prefix is treated as an application artifact iff it is inside a
+    dedicated folder and contains a file that follows a pattern.
+    (e.g., `nsbno/trafficinfo-aws/lambdas/<application-name>/<sha1>.zip`).
 
     Args:
-        lambda_names: The name of the Lambda functions to set versions for.
-        bucket_name: The name of the S3 bucket to use when looking for Lambda deployment packages.
-        s3_prefix: The S3 prefix to use when looking for Lambda deployment packages
+        application_names: The name of the applications to set versions for.
+        bucket_name: The name of the S3 bucket to use when looking for application artifacts.
+        s3_prefix: The S3 prefix to use when looking for application artifacts
             (e.g., `nsbno/trafficinfo-aws/lambdas`).
+        allowed_key_patterns: Allowed S3 key patterns for application artifacts.
+        artifact_tag_filters: An optional list of S3 metadata tags to filter artifacts on (e.g., ["master-branch"]).
 
     Returns:
-        A dictionary containing the S3 keys of the Lambda functions together with the
-        S3 version of their respective deployment packages.
+        A dictionary containing the application names together with the
+        SHA1 of the latest artifact.
     """
     s3 = boto3.client("s3")
-    contents_of_lambda_folder = s3.list_objects(
-        Bucket=bucket_name, Prefix=s3_prefix
-    )
-
-    try:
-        content = contents_of_lambda_folder["Contents"]
-    except KeyError:
-        # 'Contents' key will be missing from response if no matching
-        # objects were found
-        logger.info(
-            "Did not find any objects in bucket '%s' matching the prefix '%s'",
-            bucket_name,
-            s3_prefix,
-        )
-        return {}
-
-    s3_files = list(map(lambda s3_file: s3_file["Key"], content))
-    logger.info("Found S3 files '%s'", s3_files)
-    s3_deployment_packages = list(
-        filter(
-            lambda key: key.rsplit("/", 2)[1] in lambda_names
-            and key.rsplit("/", 1) != s3_prefix
-            and (key.endswith("/package.zip") or key.endswith("/package.jar")),
-            s3_files,
-        )
-    )
-    logger.info(
-        "Found Lambda deployment packages '%s'", s3_deployment_packages
-    )
-
     s3_resource = boto3.resource("s3")
-    versions = {
-        s3_key: s3_resource.Object(bucket_name, s3_key).version_id
-        for s3_key in s3_deployment_packages
-    }
+    versions = {}
 
-    logger.info("Found Lambda versions '%s'", versions)
+    for application_name in application_names:
+        prefix = f"{s3_prefix + '/' if s3_prefix else ''}{application_name}/"
+        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        try:
+            objects = response["Contents"]
+        except KeyError:
+            logger.info(
+                "Did not find any objects in bucket '%s' matching the prefix '%s'",
+                bucket_name,
+                prefix,
+            )
+            continue
+
+        while response["IsTruncated"]:
+            response = s3.list_objects_v2(
+                Bucket=bucket_name,
+                ContinuationToken=response["NextContinuationToken"],
+                Prefix=prefix,
+            )
+            objects = objects + response["Contents"]
+        logger.info(
+            "Found a total of %s objects under prefix '%s' %s",
+            len(objects),
+            f"{bucket_name}/{prefix}",
+            objects,
+        )
+        valid_objects = list(
+            filter(
+                lambda obj: any(
+                    re.search(pattern, obj["Key"])
+                    for pattern in allowed_key_patterns
+                ),
+                objects,
+            )
+        )
+        logger.info(
+            "Found %s valid objects under prefix '%s' %s",
+            len(valid_objects),
+            f"{bucket_name}/{prefix}",
+            valid_objects,
+        )
+        sorted_objects = sorted(
+            valid_objects,
+            key=lambda obj: obj["LastModified"].timestamp(),
+            reverse=True,
+        )
+        if len(sorted_objects):
+            for obj in sorted_objects:
+                metadata = s3_resource.Object(bucket_name, obj["Key"]).metadata
+                logger.info(
+                    "Object with key '%s' has metadata '%s'",
+                    obj["Key"],
+                    metadata,
+                )
+                tags = (
+                    json.loads(metadata["tags"])
+                    if metadata.get("tags", None)
+                    else None
+                )
+                if (
+                    tags
+                    and any(tag.endswith("-SHA1") for tag in tags)
+                    and all(tag in tags for tag in artifact_tag_filters)
+                ):
+                    version = next(
+                        (
+                            tag.split("-SHA1")[0]
+                            for tag in tags
+                            if tag.endswith("-SHA1")
+                        ),
+                        None,
+                    )
+                    if version:
+                        versions[application_name] = version
+                        break
+
+    logger.info("Found versions '%s'", versions)
     return versions
 
 
-def set_ssm_parameters_for_lambdas(
-    credentials, lambda_versions, ssm_prefix, region
-):
+def set_ssm_parameters(credentials, versions, ssm_prefix, region):
     """Updates (or creates) one parameter in parameter store for each
-    pair of Lambda function and version passed in.
+    pair of application and version passed in.
 
     Example: The versions in the following dict would result in a parameter with
-        name "hello-world" and value "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B":
-        `{"nsbno/trafficinfo-aws/lambdas/hello-world/package.zip": "AAL5Srm2XNB10IziOoI7nfZ4_nsHNr_B"}`
+        name "/<ssm-prefix>/trafficinfo-docker-app" and value "abcdefgh":
+        `{"trafficinfo-docker-app": "acdefgh"}`
 
     Args:
         credentials: The credentials to use when creating the SSM client.
-        lambda_versions: A dictionary containing the S3 key of Lambda zip files
-            as well as their S3 version.
+        versions: A dictionary containing the names of applications
+            as well as their version.
         ssm_prefix: The prefix to use for the parameters in parameter store
             (e.g., `trafficinfo`).
         region: The region to use when creating the SSM client.
     """
+    if len(ssm_prefix) == 0 or ssm_prefix.lower().startswith("aws"):
+        logger.error("SSM prefix '%s' is not valid", ssm_prefix)
+        raise ValueError()
 
-    for s3_key, s3_version in lambda_versions.items():
-        lambda_name = s3_key.rsplit("/", 2)[1]
-        ssm_name = f"/{ssm_prefix}/{lambda_name}"
-        update_parameterstore(credentials, ssm_name, s3_version, region)
-
-
-def set_ssm_parameters_for_ecr_repos(
-    credentials, ecr_versions, ssm_prefix, region
-):
-    """Updates (or creates) one parameter in parameter store for each
-    pair of ECR repository and version passed in.
-
-    Example: The versions in the following dict would result in a parameter with
-        name "trafficinfo-docker-app" and value "abcdefgh-SHA1":
-        `{"trafficinfo-docker-app": "acdefgh-SHA1"}`
-
-    Args:
-        credentials: The credentials to use when creating the SSM client.
-        lambda_versions: A dictionary containing the names of ECR
-            repositories as well as their version.
-        ssm_prefix: The prefix to use for the parameters in parameter store
-            (e.g., `trafficinfo`).
-        region: The region to use when creating the SSM client.
-    """
-    for repo, version in ecr_versions.items():
-        ssm_name = f"/{ssm_prefix}/{repo}"
+    for application, version in versions.items():
+        ssm_name = f"/{ssm_prefix}/{application}"
         update_parameterstore(credentials, ssm_name, version, region)
 
 
@@ -283,42 +312,74 @@ def lambda_handler(event, context):
 
     region = os.environ["AWS_REGION"]
 
-    ssm_prefix = event["ssm_prefix"]
+    ssm_prefix = event.get("ssm_prefix", "")
+
+    get_versions = event.get("get_versions", True)
+    set_versions = event.get("set_versions", True)
 
     ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
     ecr_repositories = event.get("ecr_repositories", [])
+
     lambda_names = event.get("lambda_names", [])
+    lambda_tag_filters = event.get("lambda_tag_filters", [])
     lambda_s3_bucket = event.get("lambda_s3_bucket", "")
     lambda_s3_prefix = event.get("lambda_s3_prefix", "")
+
+    frontend_names = event.get("frontend_names", [])
+    frontend_tag_filters = event.get("frontend_tag_filters", [])
+    frontend_s3_bucket = event.get("frontend_s3_bucket", "")
+    frontend_s3_prefix = event.get("frontend_s3_prefix", "")
 
     role_to_assume = event.get("role_to_assume", "")
     account_id = event.get("account_id", "")
 
-    lambda_versions = {}
-    if lambda_s3_bucket and lambda_s3_prefix and len(lambda_names):
-        lambda_versions = get_lambda_versions(
-            lambda_names, lambda_s3_bucket, lambda_s3_prefix
+    versions = event.get("versions", {})
+    ecr_versions = versions.get("ecr", {})
+    frontend_versions = versions.get("frontend", {})
+    lambda_versions = versions.get("lambda", {})
+
+    if get_versions and lambda_s3_bucket and len(lambda_names):
+        lambda_versions = get_s3_artifact_versions(
+            lambda_names,
+            lambda_s3_bucket,
+            lambda_s3_prefix,
+            [r"/[a-z0-9]{7,}\.(zip|jar)$"],
+            artifact_tag_filters=lambda_tag_filters,
         )
 
-    ecr_versions = {}
-    if len(ecr_repositories):
+    if get_versions and frontend_s3_bucket and len(frontend_names):
+        frontend_versions = get_s3_artifact_versions(
+            frontend_names,
+            frontend_s3_bucket,
+            frontend_s3_prefix,
+            [r"/[a-z0-9]{7,}\.zip$"],
+            artifact_tag_filters=frontend_tag_filters,
+        )
+
+    if get_versions and len(ecr_repositories):
         ecr_versions = get_ecr_versions(
             ecr_repositories, ecr_image_tag_filters
         )
 
-    credentials = (
-        assume_role(account_id, role_to_assume)
-        if account_id and role_to_assume
-        else None
-    )
+    if set_versions:
+        if len(
+            set().union(ecr_versions, frontend_versions, lambda_versions)
+        ) != len(ecr_versions) + len(frontend_versions) + len(lambda_versions):
+            logger.error(
+                "One or more ECR, Lambda and/or frontend applications are sharing the same name"
+            )
+            raise ValueError()
+        credentials = (
+            assume_role(account_id, role_to_assume)
+            if account_id and role_to_assume
+            else None
+        )
+        set_ssm_parameters(credentials, lambda_versions, ssm_prefix, region)
+        set_ssm_parameters(credentials, frontend_versions, ssm_prefix, region)
+        set_ssm_parameters(credentials, ecr_versions, ssm_prefix, region)
 
-    set_ssm_parameters_for_lambdas(
-        credentials, lambda_versions, ssm_prefix, region
-    )
-    set_ssm_parameters_for_ecr_repos(
-        credentials, ecr_versions, ssm_prefix, region
-    )
-
-    # TODO: Upload a metafile that contains the mapping between SHA1 and S3 version
-    # lambda_meta = json.dumps({[{"lambda": l, "sha1": sha1, "s3_version": versions[l]} for l in versions]
-    return
+    return {
+        "ecr": ecr_versions,
+        "frontend": frontend_versions,
+        "lambda": lambda_versions,
+    }

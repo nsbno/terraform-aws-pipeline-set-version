@@ -37,6 +37,7 @@ data "aws_iam_policy_document" "ssm_for_lambda" {
   }
 }
 
+# TODO: Make this more restrictive
 data "aws_iam_policy_document" "ecr_for_lambda" {
   statement {
     effect    = "Allow"
@@ -50,6 +51,7 @@ data "aws_iam_policy_document" "ecr_for_lambda" {
   }
 }
 
+# TODO: Make this more restrictive
 data "aws_iam_policy_document" "s3_for_lambda" {
   statement {
     effect    = "Allow"

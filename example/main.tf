@@ -43,7 +43,7 @@ resource "aws_iam_role_policy" "lambda_to_state_machine" {
 # set-version                    #
 #                                #
 ##################################
-module "set_version_lambda" {
-  source      = "github.com/nsbno/terraform-aws-pipeline-set-version" # Should be pinned to a specific ref
+module "set_version" {
+  source      = "../"
   name_prefix = local.name_prefix
 }
