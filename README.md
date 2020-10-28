@@ -32,14 +32,27 @@ Most inputs are optional, but some of them will only have an effect if they are 
 #### `account_id` (optional - requires `role_to_assume` to be set)
 The id of the account that owns the role `role_to_assume`. If not supplied, the function will simply run using its execution role.
 
-#### `ecr_image_tag_filters` (optional - requires `ecr_repositories` to be set)
-Require that only images tagged with certain tags are included when looking for the most recent image in an ECR repository.
+#### `ecr_applications` (optional)
+An object that describes the ECR repositories containing Docker applications to set versions for, and optionally which image tags to filter on when looking for the most recent Docker image. Example:
+```json
+"ecr_applications": {
+  "my-repo": {},
+  "my-second-repo": {
+    "tag_filters": ["master-branch"]
+  }
+}
+```
 
-#### `ecr_repositories` (optional)
-The names of the ECR repositories containing Docker applications to set versions for.
-
-#### `frontend_names` (optional - requires all `frontend_*` inputs to be set)
-The names of the frontend applications to set versions for.
+#### `frontend_applications` (optional - requires all `frontend_*` inputs to be set)
+An object that describes which frontend applications to set versions for, and optionally which S3 metadata tags to filter on when looking for the most recent S3 artifact. Example:
+```json
+"frontend_applications": {
+  "my-app": {},
+  "my-second-app": {
+    "tag_filters": ["master-branch"]
+  }
+}
+```
 
 #### `frontend_s3_bucket` (optional - requires all `frontend_*` inputs to be set)
 The name of the S3 bucket containing frontend bundles to set versions for.
@@ -47,20 +60,23 @@ The name of the S3 bucket containing frontend bundles to set versions for.
 #### `frontend_s3_prefix` (optional - requires all `frontend_*` inputs to be set)
 The S3 prefix where frontend bundles are stored.
 
-#### `frontend_tag_filters` (optional - requires all `frontend_*` inputs to be set)
-Require that only artifacts that contains specific tags in the user-defined S3 metadata `tags` are included when looking for the most recent artifact.
-
-#### `lambda_names` (optional - requires all `lambda_*` inputs to be set)
+#### `lambda_applications` (optional - requires all `lambda_*` inputs to be set)
 The names of the Lambda functions to set versions for.
+An object that describes which Lambda applications to set versions for, and optionally which S3 metadata tags to filter on when looking for the most recent S3 artifact. Example:
+```json
+"lambda_applications": {
+  "my-app": {},
+  "my-second-app": {
+    "tag_filters": ["master-branch"]
+  }
+}
+```
 
 #### `lambda_s3_bucket` (optional - requires all `lambda_*` inputs to be set)
 The name of the S3 bucket containing Lambda deployment packages to set versions for.
 
 #### `lambda_s3_prefix` (optional - requires all `lambda_*` inputs to be set)
 The S3 prefix where Lambda deployment packages are stored.
-
-#### `lambda_tag_filters` (optional - requires all `lambda_*` inputs to be set)
-Require that only artifacts that contains specific tags in the user-defined S3 metadata `tags` are included when looking for the most recent artifact.
 
 #### `role_to_assume` (optional - requires `account_id` to be set)
 The name of the role to assume. (Note: A policy should be attached to the the Lambda's execution role, exposed as an output in Terraform, that allows it to assume the role).
