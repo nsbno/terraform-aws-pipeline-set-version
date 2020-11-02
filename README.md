@@ -33,25 +33,31 @@ Most inputs are optional, but some of them will only have an effect if they are 
 The id of the account that owns the role `role_to_assume`. If not supplied, the function will simply run using its execution role.
 
 #### `ecr_applications` (optional)
-An object that describes the ECR repositories containing Docker applications to set versions for, and optionally which image tags to filter on when looking for the most recent Docker image. Example:
+A list that describes the ECR repositories containing Docker applications to set versions for, and optionally which image tags to filter on when looking for the most recent Docker image. Example:
 ```json
-"ecr_applications": {
-  "my-repo": {},
-  "my-second-repo": {
+"ecr_applications": [
+  {
+    "name": "my-repo"
+  },
+  {
+    "name": "my-second-repo",
     "tag_filters": ["master-branch"]
   }
-}
+]
 ```
 
 #### `frontend_applications` (optional - requires all `frontend_*` inputs to be set)
-An object that describes which frontend applications to set versions for, and optionally which S3 metadata tags to filter on when looking for the most recent S3 artifact. Example:
+A list that describes which frontend applications to set versions for, and optionally which S3 metadata tags to filter on when looking for the most recent S3 artifact. Example:
 ```json
-"frontend_applications": {
-  "my-app": {},
-  "my-second-app": {
+"frontend_applications": [
+  {
+    "name": "my-app"
+  },
+  {
+    "name": "my-second-app",
     "tag_filters": ["master-branch"]
   }
-}
+]
 ```
 
 #### `frontend_s3_bucket` (optional - requires all `frontend_*` inputs to be set)
@@ -61,15 +67,17 @@ The name of the S3 bucket containing frontend bundles to set versions for.
 The S3 prefix where frontend bundles are stored.
 
 #### `lambda_applications` (optional - requires all `lambda_*` inputs to be set)
-The names of the Lambda functions to set versions for.
-An object that describes which Lambda applications to set versions for, and optionally which S3 metadata tags to filter on when looking for the most recent S3 artifact. Example:
+A list that describes which Lambda applications to set versions for, and optionally which S3 metadata tags to filter on when looking for the most recent S3 artifact. Example:
 ```json
-"lambda_applications": {
-  "my-app": {},
-  "my-second-app": {
+"lambda_applications": [
+  {
+    "name": "my-app"
+  },
+  {
+    "name": "my-second-app",
     "tag_filters": ["master-branch"]
   }
-}
+]
 ```
 
 #### `lambda_s3_bucket` (optional - requires all `lambda_*` inputs to be set)
