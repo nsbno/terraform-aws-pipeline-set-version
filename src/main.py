@@ -58,7 +58,7 @@ def get_ecr_versions(applications):
     of the most recently pushed image.
 
     Args:
-        applications: A dictionary of ECR repository names to find versions for (e.g., { "my-ecr-repo": { "tag_filters": ["master-branch"]}, where tag_filters is an optional list of image tags to filter on.
+        applications: A list of dictionaries of ECR repository names to find versions for (e.g., [{ "name": "my-ecr-repo", "tag_filters": ["master-branch"]}], where tag_filters is an optional list of image tags to filter on.
 
     Returns:
         A dictionary containing the names of ECR repositories together with the
@@ -70,7 +70,8 @@ def get_ecr_versions(applications):
     if len(repositories):
         repositories = list(
             filter(
-                lambda r: r["repositoryName"] in applications,
+                lambda r: r["repositoryName"]
+                in list(map(lambda app: app["name"], applications)),
                 repositories,
             )
         )
@@ -78,7 +79,13 @@ def get_ecr_versions(applications):
     versions = {}
     for repo in repositories:
         name = repo["repositoryName"]
-        image_tag_filters = applications[repo].get("tag_filters", [])
+        app = next((app for app in applications if app["name"] == name), None)
+        if app is None:
+            logger.error(
+                "No repository with name '%s' found in input list", name
+            )
+            continue
+        image_tag_filters = app.get("tag_filters", [])
         # Only tagged images
         try:
             filter_kwargs = {}
@@ -186,7 +193,7 @@ def get_s3_artifact_versions(
     (e.g., `nsbno/trafficinfo-aws/lambdas/<application-name>/<sha1>.zip`).
 
     Args:
-        applications: A dictionary of S3 artifacts to find versions for (e.g., { "my-s3-artifact": { "tag_filters": ["master-branch"]}, where tag_filters is an optional list of S3 metadata tags to filter artifacts on.
+        applications: A list of dictionary of S3 artifacts to find versions for (e.g., [{ "name": "my-s3-artifact", "tag_filters": ["master-branch"]}], where tag_filters is an optional list of S3 metadata tags to filter artifacts on.
         bucket_name: The name of the S3 bucket to use when looking for application artifacts.
         s3_prefix: The S3 prefix to use when looking for application artifacts
             (e.g., `nsbno/trafficinfo-aws/lambdas`).
@@ -200,8 +207,9 @@ def get_s3_artifact_versions(
     s3_resource = boto3.resource("s3")
     versions = {}
 
-    for application_name, details in applications.items():
-        artifact_tag_filters = details.get("tag_filters", [])
+    for application in applications:
+        application_name = application["name"]
+        artifact_tag_filters = application.get("tag_filters", [])
         prefix = f"{s3_prefix + '/' if s3_prefix else ''}{application_name}/"
         response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
         try:
@@ -316,24 +324,24 @@ def lambda_handler(event, context):
     get_versions = event.get("get_versions", True)
     set_versions = event.get("set_versions", True)
 
-    ecr_applications = event.get("ecr_applications", {}) or {
-        app: {"tag_filters": event.get("ecr_image_tag_filters", [])}
+    ecr_applications = event.get("ecr_applications", []) or [
+        {"name": app, "tag_filters": event.get("ecr_image_tag_filters", [])}
         for app in event.get("ecr_repositories", [])
-    }  # Fallback to stay backwards compatible
+    ]  # Fallback to stay backwards compatible
 
     lambda_s3_bucket = event.get("lambda_s3_bucket", "")
     lambda_s3_prefix = event.get("lambda_s3_prefix", "")
-    lambda_applications = event.get("lambda_applications", {}) or {
-        app: {"tag_filters": event.get("lambda_tag_filters", [])}
+    lambda_applications = event.get("lambda_applications", []) or [
+        {"name": app, "tag_filters": event.get("lambda_tag_filters", [])}
         for app in event.get("lambda_names", [])
-    }  # Fallback to stay backwards compatible
+    ]  # Fallback to stay backwards compatible
 
     frontend_s3_bucket = event.get("frontend_s3_bucket", "")
     frontend_s3_prefix = event.get("frontend_s3_prefix", "")
-    frontend_applications = event.get("frontend_applications", {}) or {
-        app: {"tag_filters": event.get("frontend_tag_filters", [])}
+    frontend_applications = event.get("frontend_applications", []) or [
+        {"name": app, "tag_filters": event.get("frontend_tag_filters", [])}
         for app in event.get("frontend_names", [])
-    }  # Fallback to stay backwards compatible
+    ]  # Fallback to stay backwards compatible
 
     role_to_assume = event.get("role_to_assume", "")
     account_id = event.get("account_id", "")
