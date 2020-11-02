@@ -50,7 +50,7 @@ def assume_role(account_id, account_role):
     return assumedRoleObject["Credentials"]
 
 
-def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
+def get_ecr_versions(applications):
     """Gets the latest image version of all ECR repositories in the current account.
 
     Only repositories containing at least one image tagged with `image_tag` and a tag
@@ -58,8 +58,7 @@ def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
     of the most recently pushed image.
 
     Args:
-        repo_name_filters: An optional list of names of ECR to filter on (e.g., ["trafficinfo-baseline-micronaut"])
-        image_tag_filters: An optional list of image tags to filter on (e.g., ["master-branch"]).
+        applications: A list of dictionaries of ECR repository names to find versions for (e.g., [{ "name": "my-ecr-repo", "tag_filters": ["master-branch"]}], where tag_filters is an optional list of image tags to filter on.
 
     Returns:
         A dictionary containing the names of ECR repositories together with the
@@ -68,10 +67,11 @@ def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
 
     client = boto3.client("ecr")
     repositories = client.describe_repositories()["repositories"]
-    if len(repo_name_filters):
+    if len(repositories):
         repositories = list(
             filter(
-                lambda r: r["repositoryName"] in repo_name_filters,
+                lambda r: r["repositoryName"]
+                in list(map(lambda app: app["name"], applications)),
                 repositories,
             )
         )
@@ -79,6 +79,13 @@ def get_ecr_versions(repo_name_filters=[], image_tag_filters=[]):
     versions = {}
     for repo in repositories:
         name = repo["repositoryName"]
+        app = next((app for app in applications if app["name"] == name), None)
+        if app is None:
+            logger.error(
+                "No repository with name '%s' found in input list", name
+            )
+            continue
+        image_tag_filters = app.get("tag_filters", [])
         # Only tagged images
         try:
             filter_kwargs = {}
@@ -174,11 +181,10 @@ def update_parameterstore(credentials, name, value, region):
 
 
 def get_s3_artifact_versions(
-    application_names,
+    applications,
     bucket_name,
     s3_prefix,
     allowed_key_patterns=[r"[a-z0-9]{7}\.(zip|jar)$"],
-    artifact_tag_filters=[],
 ):
     """Gets the S3 version of application artifacts stored under a given S3 prefix.
 
@@ -187,12 +193,11 @@ def get_s3_artifact_versions(
     (e.g., `nsbno/trafficinfo-aws/lambdas/<application-name>/<sha1>.zip`).
 
     Args:
-        application_names: The name of the applications to set versions for.
+        applications: A list of dictionary of S3 artifacts to find versions for (e.g., [{ "name": "my-s3-artifact", "tag_filters": ["master-branch"]}], where tag_filters is an optional list of S3 metadata tags to filter artifacts on.
         bucket_name: The name of the S3 bucket to use when looking for application artifacts.
         s3_prefix: The S3 prefix to use when looking for application artifacts
             (e.g., `nsbno/trafficinfo-aws/lambdas`).
         allowed_key_patterns: Allowed S3 key patterns for application artifacts.
-        artifact_tag_filters: An optional list of S3 metadata tags to filter artifacts on (e.g., ["master-branch"]).
 
     Returns:
         A dictionary containing the application names together with the
@@ -202,7 +207,9 @@ def get_s3_artifact_versions(
     s3_resource = boto3.resource("s3")
     versions = {}
 
-    for application_name in application_names:
+    for application in applications:
+        application_name = application["name"]
+        artifact_tag_filters = application.get("tag_filters", [])
         prefix = f"{s3_prefix + '/' if s3_prefix else ''}{application_name}/"
         response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
         try:
@@ -317,18 +324,24 @@ def lambda_handler(event, context):
     get_versions = event.get("get_versions", True)
     set_versions = event.get("set_versions", True)
 
-    ecr_image_tag_filters = event.get("ecr_image_tag_filters", [])
-    ecr_repositories = event.get("ecr_repositories", [])
+    ecr_applications = event.get("ecr_applications", []) or [
+        {"name": app, "tag_filters": event.get("ecr_image_tag_filters", [])}
+        for app in event.get("ecr_repositories", [])
+    ]  # Fallback to stay backwards compatible
 
-    lambda_names = event.get("lambda_names", [])
-    lambda_tag_filters = event.get("lambda_tag_filters", [])
     lambda_s3_bucket = event.get("lambda_s3_bucket", "")
     lambda_s3_prefix = event.get("lambda_s3_prefix", "")
+    lambda_applications = event.get("lambda_applications", []) or [
+        {"name": app, "tag_filters": event.get("lambda_tag_filters", [])}
+        for app in event.get("lambda_names", [])
+    ]  # Fallback to stay backwards compatible
 
-    frontend_names = event.get("frontend_names", [])
-    frontend_tag_filters = event.get("frontend_tag_filters", [])
     frontend_s3_bucket = event.get("frontend_s3_bucket", "")
     frontend_s3_prefix = event.get("frontend_s3_prefix", "")
+    frontend_applications = event.get("frontend_applications", []) or [
+        {"name": app, "tag_filters": event.get("frontend_tag_filters", [])}
+        for app in event.get("frontend_names", [])
+    ]  # Fallback to stay backwards compatible
 
     role_to_assume = event.get("role_to_assume", "")
     account_id = event.get("account_id", "")
@@ -338,28 +351,24 @@ def lambda_handler(event, context):
     frontend_versions = versions.get("frontend", {})
     lambda_versions = versions.get("lambda", {})
 
-    if get_versions and lambda_s3_bucket and len(lambda_names):
+    if get_versions and lambda_s3_bucket and len(lambda_applications):
         lambda_versions = get_s3_artifact_versions(
-            lambda_names,
+            lambda_applications,
             lambda_s3_bucket,
             lambda_s3_prefix,
             [r"/[a-z0-9]{7,}\.(zip|jar)$"],
-            artifact_tag_filters=lambda_tag_filters,
         )
 
-    if get_versions and frontend_s3_bucket and len(frontend_names):
+    if get_versions and frontend_s3_bucket and len(frontend_applications):
         frontend_versions = get_s3_artifact_versions(
-            frontend_names,
+            frontend_applications,
             frontend_s3_bucket,
             frontend_s3_prefix,
             [r"/[a-z0-9]{7,}\.zip$"],
-            artifact_tag_filters=frontend_tag_filters,
         )
 
-    if get_versions and len(ecr_repositories):
-        ecr_versions = get_ecr_versions(
-            ecr_repositories, ecr_image_tag_filters
-        )
+    if get_versions and len(ecr_applications):
+        ecr_versions = get_ecr_versions(ecr_applications)
 
     if set_versions:
         if len(

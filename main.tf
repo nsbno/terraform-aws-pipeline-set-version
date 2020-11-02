@@ -22,7 +22,7 @@ resource "aws_lambda_function" "pipeline_set_version" {
   runtime          = "python3.7"
   filename         = data.archive_file.lambda_src.output_path
   source_code_hash = filebase64sha256(data.archive_file.lambda_src.output_path)
-  timeout          = 20
+  timeout          = var.lambda_timeout
   tags             = var.tags
 }
 

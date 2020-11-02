@@ -8,3 +8,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "lambda_timeout" {
+  description = "The maximum number of seconds the Lambda is allowed to run."
+  default     = 30
+}
