@@ -146,7 +146,11 @@ def get_ecr_versions(applications):
             name,
             most_recent_sha1,
         )
-        versions[name] = most_recent_sha1
+        versions[name] = {
+            "version": most_recent_sha1,
+            "location": repo["repositoryUri"].split("/")[0],  # Registry URI
+            "path": repo["repositoryName"]
+        }
 
     logger.info("Found ECR versions '%s'", versions)
     return versions
@@ -282,7 +286,11 @@ def get_s3_artifact_versions(
                         None,
                     )
                     if version:
-                        versions[application_name] = version
+                        versions[application_name] = {
+                            "version": version,
+                            "location": bucket_name,
+                            "path": obj["Key"].rsplit("/", 1)[0],
+                        }
                         break
 
     logger.info("Found versions '%s'", versions)
@@ -311,7 +319,13 @@ def set_ssm_parameters(credentials, versions, ssm_prefix, region):
 
     for application, version in versions.items():
         ssm_name = f"/{ssm_prefix}/{application}"
-        update_parameterstore(credentials, ssm_name, version, region)
+
+        for key, value in version.items():
+            if key == "version":
+                # This is to support backwards compatability!
+                update_parameterstore(credentials, ssm_name, value, region)
+            else:
+                update_parameterstore(credentials, f"{ssm_name}/{key}", value, region)
 
 
 def lambda_handler(event, context):
